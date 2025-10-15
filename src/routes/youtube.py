@@ -6,340 +6,295 @@ data_api_path = '/opt/.manus/.sandbox-runtime'
 if os.path.exists(data_api_path) and data_api_path not in sys.path:
     sys.path.append(data_api_path)
 
-from flask import Blueprint, jsonify, request
-
-try:
-    from data_api import ApiClient
-    HAS_DATA_API = True
-except ImportError:
-    HAS_DATA_API = False
-    print("Warning: data_api not available, using fallback methods")
-from collections import Counter
-import re
+from flask import Blueprint, jsonify
+import requests
+import json
 
 youtube_bp = Blueprint('youtube', __name__)
 
-if HAS_DATA_API:
-    client = ApiClient()
-else:
-    client = None
+def get_youtube_api_key():
+    """YouTube API 키 가져오기"""
+    # API 키 우선순위: 파일 > 환경변수
+    api_key = None
+    
+    # 파일에서 로드
+    config_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json')
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, 'r') as f:
+                keys = json.load(f)
+                api_key = keys.get('youtube_api_key')
+        except:
+            pass
+    
+    # 환경변수에서 로드
+    if not api_key:
+        api_key = os.getenv('YOUTUBE_API_KEY')
+    
+    return api_key
 
 @youtube_bp.route('/channel/<channel_id>', methods=['GET'])
-def get_channel_info(channel_id):
-    """채널 상세 정보 조회"""
-    if not HAS_DATA_API or client is None:
-        return jsonify({'error': 'YouTube API not available'}), 503
+def get_channel(channel_id):
+    """채널 정보 조회 (YouTube Data API v3)"""
+    api_key = get_youtube_api_key()
+    
+    if not api_key:
+        return jsonify({'error': 'YouTube API key not configured'}), 503
+    
     try:
-        query_params = {
+        # YouTube Data API v3 호출
+        url = 'https://www.googleapis.com/youtube/v3/channels'
+        params = {
+            'part': 'snippet,statistics,brandingSettings',
             'id': channel_id,
-            'hl': 'ko'
+            'key': api_key
         }
         
-        response = client.call_api('Youtube/get_channel_details', query=query_params)
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
         
-        if not response:
+        if 'items' not in data or len(data['items']) == 0:
             return jsonify({'error': 'Channel not found'}), 404
         
-        # 필요한 정보만 추출
-        channel_data = {
-            'channelId': response.get('channelId'),
-            'title': response.get('title'),
-            'description': response.get('description'),
-            'customUrl': response.get('customUrl'),
-            'handle': response.get('handle'),
-            'country': response.get('country'),
-            'joinedDate': response.get('joinedDate'),
-            'stats': response.get('stats', {}),
-            'avatar': response.get('avatar', []),
-            'banner': response.get('banner', []),
-            'badges': response.get('badges', []),
-            'keywords': response.get('keywords', [])
+        channel = data['items'][0]
+        
+        # 데이터 정리
+        result = {
+            'id': channel['id'],
+            'title': channel['snippet']['title'],
+            'description': channel['snippet']['description'],
+            'customUrl': channel['snippet'].get('customUrl', ''),
+            'publishedAt': channel['snippet']['publishedAt'],
+            'thumbnail': channel['snippet']['thumbnails']['high']['url'],
+            'stats': {
+                'subscribers': channel['statistics'].get('subscriberCount', '0'),
+                'subscribersText': format_number(int(channel['statistics'].get('subscriberCount', '0'))),
+                'videos': int(channel['statistics'].get('videoCount', '0')),
+                'views': int(channel['statistics'].get('viewCount', '0'))
+            }
         }
         
-        return jsonify(channel_data)
+        return jsonify(result)
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
 
 @youtube_bp.route('/channel/<channel_id>/videos', methods=['GET'])
 def get_channel_videos(channel_id):
-    """채널의 비디오 목록 조회"""
-    if not HAS_DATA_API or client is None:
-        return jsonify({'error': 'YouTube API not available'}), 503
+    """채널의 최신 동영상 조회 (YouTube Data API v3)"""
+    api_key = get_youtube_api_key()
+    
+    if not api_key:
+        return jsonify({'error': 'YouTube API key not configured'}), 503
+    
     try:
-        filter_type = request.args.get('filter', 'videos_latest')
-        cursor = request.args.get('cursor', None)
-        
-        query_params = {
+        # 1. 채널의 업로드 플레이리스트 ID 가져오기
+        channel_url = 'https://www.googleapis.com/youtube/v3/channels'
+        channel_params = {
+            'part': 'contentDetails',
             'id': channel_id,
-            'filter': filter_type,
-            'hl': 'ko',
-            'gl': 'KR'
+            'key': api_key
         }
         
-        if cursor:
-            query_params['cursor'] = cursor
+        channel_response = requests.get(channel_url, params=channel_params, timeout=10)
+        channel_data = channel_response.json()
         
-        response = client.call_api('Youtube/get_channel_videos', query=query_params)
+        if 'items' not in channel_data or len(channel_data['items']) == 0:
+            return jsonify({'error': 'Channel not found'}), 404
         
-        if not response:
-            return jsonify({'error': 'Videos not found'}), 404
+        uploads_playlist_id = channel_data['items'][0]['contentDetails']['relatedPlaylists']['uploads']
         
-        # 비디오 정보 추출 및 정리
-        videos = []
-        for content in response.get('contents', []):
-            if content.get('type') == 'video':
-                video = content.get('video', {})
-                videos.append({
-                    'videoId': video.get('videoId'),
-                    'title': video.get('title'),
-                    'publishedTimeText': video.get('publishedTimeText'),
-                    'lengthSeconds': video.get('lengthSeconds'),
-                    'viewCount': video.get('stats', {}).get('views', 0),
-                    'thumbnails': video.get('thumbnails', []),
-                    'isLiveNow': video.get('isLiveNow', False),
-                    'badges': video.get('badges', [])
-                })
-        
-        return jsonify({
-            'videos': videos,
-            'cursorNext': response.get('cursorNext', '')
-        })
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@youtube_bp.route('/search', methods=['GET'])
-def search_videos():
-    """비디오 검색"""
-    if not HAS_DATA_API or client is None:
-        return jsonify({'error': 'YouTube API not available'}), 503
-    try:
-        query = request.args.get('q', '')
-        cursor = request.args.get('cursor', None)
-        
-        if not query:
-            return jsonify({'error': 'Query parameter is required'}), 400
-        
-        query_params = {
-            'q': query,
-            'hl': 'ko',
-            'gl': 'KR'
+        # 2. 플레이리스트에서 최신 동영상 가져오기
+        videos_url = 'https://www.googleapis.com/youtube/v3/playlistItems'
+        videos_params = {
+            'part': 'snippet',
+            'playlistId': uploads_playlist_id,
+            'maxResults': 20,
+            'key': api_key
         }
         
-        if cursor:
-            query_params['cursor'] = cursor
+        videos_response = requests.get(videos_url, params=videos_params, timeout=10)
+        videos_data = videos_response.json()
         
-        response = client.call_api('Youtube/search', query=query_params)
+        # 3. 동영상 ID 수집
+        video_ids = []
+        for item in videos_data.get('items', []):
+            video_ids.append(item['snippet']['resourceId']['videoId'])
         
-        if not response:
-            return jsonify({'error': 'Search failed'}), 404
-        
-        # 검색 결과 정리
-        results = []
-        for content in response.get('contents', []):
-            result_type = content.get('type')
+        # 4. 동영상 상세 정보 가져오기 (조회수, 좋아요 등)
+        if video_ids:
+            details_url = 'https://www.googleapis.com/youtube/v3/videos'
+            details_params = {
+                'part': 'statistics,snippet',
+                'id': ','.join(video_ids),
+                'key': api_key
+            }
             
-            if result_type == 'video':
-                video = content.get('video', {})
-                results.append({
-                    'type': 'video',
-                    'videoId': video.get('videoId'),
-                    'title': video.get('title'),
-                    'channelTitle': video.get('channelTitle'),
-                    'publishedTimeText': video.get('publishedTimeText'),
-                    'viewCountText': video.get('viewCountText'),
-                    'lengthText': video.get('lengthText'),
-                    'thumbnails': video.get('thumbnails', []),
-                    'description': video.get('descriptionSnippet', '')
+            details_response = requests.get(details_url, params=details_params, timeout=10)
+            details_data = details_response.json()
+            
+            # 데이터 정리
+            videos = []
+            for video in details_data.get('items', []):
+                videos.append({
+                    'id': video['id'],
+                    'title': video['snippet']['title'],
+                    'description': video['snippet']['description'][:200],
+                    'thumbnail': video['snippet']['thumbnails']['high']['url'],
+                    'publishedAt': video['snippet']['publishedAt'],
+                    'stats': {
+                        'views': int(video['statistics'].get('viewCount', '0')),
+                        'viewsText': format_number(int(video['statistics'].get('viewCount', '0'))),
+                        'likes': int(video['statistics'].get('likeCount', '0')),
+                        'comments': int(video['statistics'].get('commentCount', '0'))
+                    }
                 })
-            elif result_type == 'channel':
-                channel = content.get('channel', {})
-                results.append({
-                    'type': 'channel',
-                    'channelId': channel.get('channelId'),
-                    'title': channel.get('title'),
-                    'subscriberCountText': channel.get('subscriberCountText'),
-                    'videoCountText': channel.get('videoCountText'),
-                    'thumbnails': channel.get('thumbnails', []),
-                    'description': channel.get('descriptionSnippet', '')
-                })
+            
+            return jsonify({'videos': videos})
         
-        return jsonify({
-            'results': results,
-            'estimatedResults': response.get('estimatedResults', 0),
-            'cursorNext': response.get('cursorNext', '')
-        })
+        return jsonify({'videos': []})
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
 
 @youtube_bp.route('/recommendations/hashtags/<channel_id>', methods=['GET'])
-def recommend_hashtags(channel_id):
-    """채널 기반 해시태그 추천"""
-    if not HAS_DATA_API or client is None:
-        return jsonify({'error': 'YouTube API not available'}), 503
-    try:
-        # 채널의 최신 비디오 가져오기
-        query_params = {
-            'id': channel_id,
-            'filter': 'videos_latest',
-            'hl': 'ko',
-            'gl': 'KR'
-        }
-        
-        response = client.call_api('Youtube/get_channel_videos', query=query_params)
-        
-        if not response:
-            return jsonify({'error': 'Channel not found'}), 404
-        
-        # 비디오 제목에서 키워드 추출
-        all_words = []
-        for content in response.get('contents', [])[:10]:  # 최신 10개 비디오
-            if content.get('type') == 'video':
-                video = content.get('video', {})
-                title = video.get('title', '')
-                
-                # 한글, 영문, 숫자만 추출 (특수문자 제거)
-                words = re.findall(r'[가-힣a-zA-Z0-9]+', title)
-                all_words.extend([w for w in words if len(w) > 1])
-        
-        # 빈도수 계산
-        word_freq = Counter(all_words)
-        
-        # 상위 20개 키워드 추출
-        top_keywords = [word for word, count in word_freq.most_common(20)]
-        
-        # 해시태그 형식으로 변환
-        hashtags = [f"#{word}" for word in top_keywords]
-        
-        return jsonify({
-            'hashtags': hashtags,
-            'keywords': top_keywords
-        })
+def get_hashtag_recommendations(channel_id):
+    """해시태그 추천 (채널 기반)"""
+    api_key = get_youtube_api_key()
     
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@youtube_bp.route('/recommendations/topics/<channel_id>', methods=['GET'])
-def recommend_topics(channel_id):
-    """채널 기반 주제 추천"""
-    if not HAS_DATA_API or client is None:
-        return jsonify({'error': 'YouTube API not available'}), 503
+    if not api_key:
+        return jsonify({'error': 'YouTube API key not configured'}), 503
+    
     try:
         # 채널 정보 가져오기
+        channel_url = 'https://www.googleapis.com/youtube/v3/channels'
         channel_params = {
+            'part': 'snippet,topicDetails',
             'id': channel_id,
-            'hl': 'ko'
+            'key': api_key
         }
         
-        channel_response = client.call_api('Youtube/get_channel_details', query=channel_params)
+        response = requests.get(channel_url, params=channel_params, timeout=10)
+        data = response.json()
         
-        if not channel_response:
+        if 'items' not in data or len(data['items']) == 0:
             return jsonify({'error': 'Channel not found'}), 404
         
-        # 채널의 키워드 추출
-        keywords = channel_response.get('keywords', [])
+        channel = data['items'][0]
+        title = channel['snippet']['title']
+        description = channel['snippet']['description']
         
-        # 키워드가 없으면 채널 제목과 설명에서 추출
-        if not keywords:
-            title = channel_response.get('title', '')
-            description = channel_response.get('description', '')
-            combined_text = f"{title} {description}"
-            keywords = re.findall(r'[가-힣a-zA-Z0-9]+', combined_text)
-            keywords = [k for k in keywords if len(k) > 2][:5]
+        # 간단한 키워드 추출 (실제로는 NLP 사용 권장)
+        keywords = []
         
-        # 각 키워드로 인기 비디오 검색
-        recommended_topics = []
+        # 제목에서 키워드 추출
+        title_words = title.split()
+        for word in title_words:
+            if len(word) > 2:
+                keywords.append(f"#{word}")
         
-        for keyword in keywords[:3]:  # 상위 3개 키워드만 사용
-            search_params = {
-                'q': keyword,
-                'hl': 'ko',
-                'gl': 'KR'
-            }
-            
-            search_response = client.call_api('Youtube/search', query=search_params)
-            
-            if search_response:
-                for content in search_response.get('contents', [])[:3]:  # 각 키워드당 3개
-                    if content.get('type') == 'video':
-                        video = content.get('video', {})
-                        recommended_topics.append({
-                            'keyword': keyword,
-                            'videoId': video.get('videoId'),
-                            'title': video.get('title'),
-                            'channelTitle': video.get('channelTitle'),
-                            'viewCountText': video.get('viewCountText'),
-                            'thumbnails': video.get('thumbnails', [])
-                        })
+        # 설명에서 키워드 추출 (첫 100자)
+        desc_words = description[:100].split()
+        for word in desc_words:
+            if len(word) > 3 and word not in keywords:
+                keywords.append(f"#{word}")
+        
+        # 일반적인 YouTube 해시태그 추가
+        general_tags = ['#YouTube', '#구독', '#좋아요', '#알림설정', '#크리에이터']
         
         return jsonify({
-            'topics': recommended_topics,
-            'baseKeywords': keywords[:3]
+            'hashtags': keywords[:10] + general_tags
         })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@youtube_bp.route('/recommendations/topics/<channel_id>', methods=['GET'])
+def get_topic_recommendations(channel_id):
+    """주제 추천"""
+    api_key = get_youtube_api_key()
+    
+    if not api_key:
+        return jsonify({'error': 'YouTube API key not configured'}), 503
+    
+    try:
+        # 채널 정보 가져오기
+        channel_url = 'https://www.googleapis.com/youtube/v3/channels'
+        channel_params = {
+            'part': 'topicDetails',
+            'id': channel_id,
+            'key': api_key
+        }
+        
+        response = requests.get(channel_url, params=channel_params, timeout=10)
+        data = response.json()
+        
+        if 'items' not in data or len(data['items']) == 0:
+            return jsonify({'error': 'Channel not found'}), 404
+        
+        topics = []
+        if 'topicDetails' in data['items'][0]:
+            topic_categories = data['items'][0]['topicDetails'].get('topicCategories', [])
+            for topic_url in topic_categories:
+                # URL에서 주제 이름 추출
+                topic_name = topic_url.split('/')[-1].replace('_', ' ')
+                topics.append(topic_name)
+        
+        return jsonify({'topics': topics if topics else ['일반']})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @youtube_bp.route('/trends', methods=['GET'])
-def get_trending():
-    """트렌드 비디오 조회 (검색 기반)"""
-    if not HAS_DATA_API or client is None:
-        return jsonify({'error': 'YouTube API not available'}), 503
+def get_trends():
+    """트렌드 동영상 조회 (YouTube Data API v3)"""
+    api_key = get_youtube_api_key()
+    
+    if not api_key:
+        return jsonify({'error': 'YouTube API key not configured'}), 503
+    
     try:
-        # 인기 키워드로 검색 (한국 기준)
-        trending_keywords = ['인기', '트렌드', '화제', 'viral', 'trending']
+        url = 'https://www.googleapis.com/youtube/v3/videos'
+        params = {
+            'part': 'snippet,statistics',
+            'chart': 'mostPopular',
+            'regionCode': 'KR',
+            'maxResults': 20,
+            'key': api_key
+        }
         
-        all_trending = []
+        response = requests.get(url, params=params, timeout=10)
+        data = response.json()
         
-        for keyword in trending_keywords[:2]:  # 2개 키워드만 사용
-            search_params = {
-                'q': keyword,
-                'hl': 'ko',
-                'gl': 'KR'
-            }
-            
-            search_response = client.call_api('Youtube/search', query=search_params)
-            
-            if search_response:
-                for content in search_response.get('contents', [])[:5]:
-                    if content.get('type') == 'video':
-                        video = content.get('video', {})
-                        
-                        # 조회수 텍스트에서 숫자 추출
-                        view_text = video.get('viewCountText', '0')
-                        view_count = 0
-                        
-                        # 조회수 파싱 (예: "1.2M views" -> 1200000)
-                        if 'M' in view_text or '백만' in view_text:
-                            view_count = 1000000
-                        elif 'K' in view_text or '천' in view_text:
-                            view_count = 1000
-                        
-                        all_trending.append({
-                            'videoId': video.get('videoId'),
-                            'title': video.get('title'),
-                            'channelTitle': video.get('channelTitle'),
-                            'publishedTimeText': video.get('publishedTimeText'),
-                            'viewCountText': view_text,
-                            'viewCount': view_count,
-                            'thumbnails': video.get('thumbnails', []),
-                            'lengthText': video.get('lengthText')
-                        })
+        trends = []
+        for video in data.get('items', []):
+            trends.append({
+                'id': video['id'],
+                'title': video['snippet']['title'],
+                'channelTitle': video['snippet']['channelTitle'],
+                'thumbnail': video['snippet']['thumbnails']['high']['url'],
+                'publishedAt': video['snippet']['publishedAt'],
+                'stats': {
+                    'views': int(video['statistics'].get('viewCount', '0')),
+                    'viewsText': format_number(int(video['statistics'].get('viewCount', '0'))),
+                    'likes': int(video['statistics'].get('likeCount', '0')),
+                    'comments': int(video['statistics'].get('commentCount', '0'))
+                }
+            })
         
-        # 조회수 기준으로 정렬
-        all_trending.sort(key=lambda x: x['viewCount'], reverse=True)
-        
-        return jsonify({
-            'trending': all_trending[:10]  # 상위 10개만 반환
-        })
+        return jsonify({'trends': trends})
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def format_number(num):
+    """숫자를 한국어 형식으로 포맷"""
+    if num >= 100000000:  # 1억 이상
+        return f"{num / 100000000:.1f}억"
+    elif num >= 10000:  # 1만 이상
+        return f"{num / 10000:.1f}만"
+    elif num >= 1000:  # 1천 이상
+        return f"{num / 1000:.1f}천"
+    else:
+        return str(num)
 
