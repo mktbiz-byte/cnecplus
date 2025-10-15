@@ -81,7 +81,7 @@ def get_channel(channel_id):
         # YouTube Data API v3 호출
         url = 'https://www.googleapis.com/youtube/v3/channels'
         params = {
-            'part': 'snippet,statistics,brandingSettings',
+            'part': 'snippet,statistics,brandingSettings,contentDetails',
             'id': channel_id,
             'key': api_key
         }
@@ -95,6 +95,10 @@ def get_channel(channel_id):
         channel = data['items'][0]
         
         # 데이터 정리
+        branding = channel.get('brandingSettings', {})
+        channel_branding = branding.get('channel', {})
+        image_branding = branding.get('image', {})
+        
         result = {
             'id': channel['id'],
             'title': channel['snippet']['title'],
@@ -102,6 +106,9 @@ def get_channel(channel_id):
             'customUrl': channel['snippet'].get('customUrl', ''),
             'publishedAt': channel['snippet']['publishedAt'],
             'thumbnail': channel['snippet']['thumbnails']['high']['url'],
+            'bannerImage': image_branding.get('bannerExternalUrl', ''),
+            'keywords': channel_branding.get('keywords', ''),
+            'country': channel['snippet'].get('country', ''),
             'stats': {
                 'subscribers': channel['statistics'].get('subscriberCount', '0'),
                 'subscribersText': format_number(int(channel['statistics'].get('subscriberCount', '0'))),
