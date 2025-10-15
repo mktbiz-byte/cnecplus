@@ -7,9 +7,13 @@ import json
 try:
     import google.generativeai as genai
     HAS_GEMINI = True
-except ImportError:
+    print("Success: google-generativeai loaded")
+except ImportError as e:
     HAS_GEMINI = False
-    print("Warning: google-generativeai not available")
+    print(f"Warning: google-generativeai not available - {e}")
+except Exception as e:
+    HAS_GEMINI = False
+    print(f"Error loading google-generativeai: {e}")
 
 ai_bp = Blueprint('ai', __name__)
 
