@@ -19,34 +19,34 @@ def hash_password(password):
 def init_admin_user():
     """초기 관리자 계정 생성"""
     try:
-        # 기존 관리자 확인
+        # 기존 관리자 삭제 후 재생성
         existing_admin = Admin.query.filter_by(username='admin').first()
-        if not existing_admin:
-            # 고정 임시 비밀번호 (첫 배포용)
-            default_password = 'cnecplus2025!'
-            
-            admin = Admin(
-                username='admin',
-                password_hash=hash_password(default_password)
-            )
-            db.session.add(admin)
+        if existing_admin:
+            db.session.delete(existing_admin)
             db.session.commit()
-            
-            print("=" * 60)
-            print("🔐 관리자 계정이 생성되었습니다!")
-            print(f"   Username: admin")
-            print(f"   Password: {default_password}")
-            print("   ⚠️  로그인 후 반드시 비밀번호를 변경하세요!")
-            print("=" * 60)
-            
-            return default_password
-        else:
-            print("ℹ️  기존 관리자 계정이 존재합니다.")
-            print("   Username: admin")
-            print("   Password: cnecplus2025! (기본 비밀번호)")
-        return None
+            print("♻️  기존 관리자 계정을 삭제했습니다.")
+        
+        # 고정 임시 비밀번호 (첫 배포용)
+        default_password = 'cnecplus2025!'
+        
+        admin = Admin(
+            username='admin',
+            password_hash=hash_password(default_password)
+        )
+        db.session.add(admin)
+        db.session.commit()
+        
+        print("=" * 60)
+        print("🔐 관리자 계정이 생성되었습니다!")
+        print(f"   Username: admin")
+        print(f"   Password: {default_password}")
+        print("   ⚠️  로그인 후 반드시 비밀번호를 변경하세요!")
+        print("=" * 60)
+        
+        return default_password
     except Exception as e:
         print(f"Error creating admin user: {e}")
+        db.session.rollback()
         return None
 
 @admin_auth_bp.route('/login', methods=['POST'])
