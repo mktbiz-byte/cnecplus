@@ -46,7 +46,7 @@ def get_youtube_api_key():
 
 def call_gemini_api(prompt, api_key):
     """Gemini REST API 직접 호출"""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     
     headers = {
         'Content-Type': 'application/json'

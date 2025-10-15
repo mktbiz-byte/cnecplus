@@ -26,6 +26,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 CORS(app, supports_credentials=True)
 
+# API 블루프린트 등록 (catch-all 라우트보다 먼저 등록)
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(youtube_bp, url_prefix='/api/youtube')
 app.register_blueprint(ai_bp, url_prefix='/api/ai')
@@ -52,13 +53,10 @@ with app.app_context():
     # 관리자 계정 초기화
     init_admin_user()
 
+# Static file serving (이 부분을 맨 마지막에 배치)
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    # API 경로는 Flask 라우트가 처리하도록 함
-    if path.startswith('api/'):
-        return "API endpoint not found", 404
-    
     static_folder_path = app.static_folder
     if static_folder_path is None:
             return "Static folder not configured", 404
@@ -75,3 +73,4 @@ def serve(path):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
+
