@@ -35,13 +35,17 @@ def get_youtube_api_key():
 
 def resolve_channel_id(input_str, api_key):
     """핸들(@) 또는 채널명을 채널 ID로 변환"""
+    print(f"[DEBUG] resolve_channel_id called with: {input_str}")
+    
     # 이미 채널 ID 형식이면 그대로 반환
     if input_str.startswith('UC') and len(input_str) == 24:
+        print(f"[DEBUG] Already a channel ID: {input_str}")
         return input_str
     
     # @ 제거
     if input_str.startswith('@'):
         input_str = input_str[1:]
+        print(f"[DEBUG] Removed @, now: {input_str}")
     
     # YouTube Data API v3의 search 엔드포인트 사용
     url = 'https://www.googleapis.com/youtube/v3/search'
@@ -53,12 +57,21 @@ def resolve_channel_id(input_str, api_key):
         'key': api_key
     }
     
+    print(f"[DEBUG] Calling YouTube Search API for: {input_str}")
     response = requests.get(url, params=params)
+    print(f"[DEBUG] Response status: {response.status_code}")
     
     if response.status_code == 200:
         data = response.json()
+        print(f"[DEBUG] Response data: {data}")
         if data.get('items'):
-            return data['items'][0]['snippet']['channelId']
+            channel_id = data['items'][0]['snippet']['channelId']
+            print(f"[DEBUG] Found channel ID: {channel_id}")
+            return channel_id
+        else:
+            print(f"[DEBUG] No items in response")
+    else:
+        print(f"[DEBUG] API error: {response.text}")
     
     return None
 

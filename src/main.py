@@ -3,7 +3,7 @@ import sys
 # DON'T CHANGE THIS !!!
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 from src.models.user import db
@@ -26,7 +26,7 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 CORS(app, supports_credentials=True)
 
-# API 블루프린트 등록 (catch-all 라우트보다 먼저 등록)
+# API 블루프린트 등록
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(youtube_bp, url_prefix='/api/youtube')
 app.register_blueprint(ai_bp, url_prefix='/api/ai')
@@ -53,22 +53,43 @@ with app.app_context():
     # 관리자 계정 초기화
     init_admin_user()
 
-# Static file serving (이 부분을 맨 마지막에 배치)
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve(path):
+# 루트 경로
+@app.route('/')
+def index():
     static_folder_path = app.static_folder
     if static_folder_path is None:
-            return "Static folder not configured", 404
-
-    if path != "" and os.path.exists(os.path.join(static_folder_path, path)):
-        return send_from_directory(static_folder_path, path)
+        return "Static folder not configured", 404
+    
+    index_path = os.path.join(static_folder_path, 'index.html')
+    if os.path.exists(index_path):
+        return send_from_directory(static_folder_path, 'index.html')
     else:
-        index_path = os.path.join(static_folder_path, 'index.html')
-        if os.path.exists(index_path):
-            return send_from_directory(static_folder_path, 'index.html')
-        else:
-            return "index.html not found", 404
+        return "index.html not found", 404
+
+# 404 에러 핸들러 - React Router를 위한 SPA 폴백
+@app.errorhandler(404)
+def not_found(e):
+    # API 경로에 대한 404는 JSON으로 반환하고 끝
+    if request.path.startswith('/api/'):
+        from flask import jsonify
+        return jsonify({'error': 'Not found'}), 404
+    
+    # 그 외 경로는 정적 파일 또는 index.html 제공
+    static_folder_path = app.static_folder
+    if static_folder_path is None:
+        return "Static folder not configured", 404
+    
+    # 요청 경로에 해당하는 정적 파일이 있으면 제공
+    requested_path = request.path.lstrip('/')
+    if requested_path and os.path.exists(os.path.join(static_folder_path, requested_path)):
+        return send_from_directory(static_folder_path, requested_path)
+    
+    # 없으면 index.html 제공 (React Router가 처리)
+    index_path = os.path.join(static_folder_path, 'index.html')
+    if os.path.exists(index_path):
+        return send_from_directory(static_folder_path, 'index.html')
+    else:
+        return "index.html not found", 404
 
 
 if __name__ == '__main__':
