@@ -55,6 +55,10 @@ with app.app_context():
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
+    # API 경로는 Flask 라우트가 처리하도록 함
+    if path.startswith('api/'):
+        return "API endpoint not found", 404
+    
     static_folder_path = app.static_folder
     if static_folder_path is None:
             return "Static folder not configured", 404
