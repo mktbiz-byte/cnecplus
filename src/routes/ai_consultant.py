@@ -26,6 +26,24 @@ def get_gemini_api_key():
     
     return None
 
+def get_youtube_api_key():
+    """YouTube API 키 가져오기"""
+    api_key = None
+    
+    config_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json')
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, 'r') as f:
+                keys = json.load(f)
+                api_key = keys.get('youtube_api_key')
+        except:
+            pass
+    
+    if not api_key:
+        api_key = os.getenv('YOUTUBE_API_KEY')
+    
+    return api_key
+
 def call_gemini_api(prompt, api_key):
     """Gemini REST API 직접 호출"""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={api_key}"
@@ -42,12 +60,12 @@ def call_gemini_api(prompt, api_key):
         }],
         "generationConfig": {
             "temperature": 0.7,
-            "maxOutputTokens": 2048,
+            "maxOutputTokens": 4096,
         }
     }
     
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=30)
+        response = requests.post(url, headers=headers, json=data, timeout=60)
         response.raise_for_status()
         result = response.json()
         
@@ -64,23 +82,85 @@ def call_gemini_api(prompt, api_key):
         print(f"Gemini API error: {e}")
         return None
 
+def get_channel_videos(channel_id, api_key, max_results=20):
+    """채널의 최신 영상 가져오기"""
+    try:
+        # 1. 채널의 업로드 플레이리스트 ID 가져오기
+        channel_url = 'https://www.googleapis.com/youtube/v3/channels'
+        channel_params = {
+            'part': 'contentDetails',
+            'id': channel_id,
+            'key': api_key
+        }
+        
+        channel_response = requests.get(channel_url, params=channel_params, timeout=10)
+        channel_data = channel_response.json()
+        
+        if 'items' not in channel_data or len(channel_data['items']) == 0:
+            return []
+        
+        uploads_playlist_id = channel_data['items'][0]['contentDetails']['relatedPlaylists']['uploads']
+        
+        # 2. 플레이리스트에서 최신 동영상 가져오기
+        videos_url = 'https://www.googleapis.com/youtube/v3/playlistItems'
+        videos_params = {
+            'part': 'snippet',
+            'playlistId': uploads_playlist_id,
+            'maxResults': max_results,
+            'key': api_key
+        }
+        
+        videos_response = requests.get(videos_url, params=videos_params, timeout=10)
+        videos_data = videos_response.json()
+        
+        # 3. 동영상 ID 수집
+        video_ids = []
+        for item in videos_data.get('items', []):
+            video_ids.append(item['snippet']['resourceId']['videoId'])
+        
+        # 4. 동영상 상세 정보 가져오기
+        if video_ids:
+            details_url = 'https://www.googleapis.com/youtube/v3/videos'
+            details_params = {
+                'part': 'statistics,snippet',
+                'id': ','.join(video_ids),
+                'key': api_key
+            }
+            
+            details_response = requests.get(details_url, params=details_params, timeout=10)
+            details_data = details_response.json()
+            
+            videos = []
+            for video in details_data.get('items', []):
+                videos.append({
+                    'title': video['snippet']['title'],
+                    'views': int(video['statistics'].get('viewCount', '0')),
+                    'likes': int(video['statistics'].get('likeCount', '0')),
+                    'comments': int(video['statistics'].get('commentCount', '0'))
+                })
+            
+            return videos
+        
+        return []
+    except Exception as e:
+        print(f"Error getting videos: {e}")
+        return []
+
 @ai_bp.route('/analyze', methods=['POST'])
 def analyze_channel():
-    """채널 분석 및 AI 기반 성장 전략 제안 (Gemini 2.0 Flash)"""
+    """채널 분석 및 AI 기반 성장 전략 제안 (실제 영상 데이터 기반)"""
     
-    api_key = get_gemini_api_key()
+    gemini_api_key = get_gemini_api_key()
+    youtube_api_key = get_youtube_api_key()
     
-    # 디버깅 정보
-    debug_info = {
-        'gemini_api_key_set': bool(api_key),
-        'config_file_exists': os.path.exists(os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json')),
-        'using_rest_api': True
-    }
-    
-    if not api_key:
+    if not gemini_api_key:
         return jsonify({
-            'error': 'Gemini API not available. Please configure GEMINI_API_KEY',
-            'debug': debug_info
+            'error': 'Gemini API not available. Please configure GEMINI_API_KEY'
+        }), 503
+    
+    if not youtube_api_key:
+        return jsonify({
+            'error': 'YouTube API not available. Please configure YOUTUBE_API_KEY'
         }), 503
     
     try:
@@ -90,68 +170,102 @@ def analyze_channel():
         if not channel_data:
             return jsonify({'error': 'No channel data provided'}), 400
         
+        # 채널 ID 추출
+        channel_id = channel_data.get('id')
+        if not channel_id:
+            return jsonify({'error': 'Channel ID not provided'}), 400
+        
+        # 실제 영상 데이터 가져오기
+        videos = get_channel_videos(channel_id, youtube_api_key, max_results=30)
+        
+        if not videos:
+            return jsonify({'error': 'Failed to fetch channel videos'}), 500
+        
+        # 영상 데이터 분석
+        videos_sorted = sorted(videos, key=lambda x: x['views'], reverse=True)
+        top_5_videos = videos_sorted[:5]
+        bottom_5_videos = videos_sorted[-5:]
+        
+        avg_views = sum(v['views'] for v in videos) / len(videos)
+        avg_likes = sum(v['likes'] for v in videos) / len(videos)
+        avg_engagement = sum((v['likes'] + v['comments']) / v['views'] * 100 if v['views'] > 0 else 0 for v in videos) / len(videos)
+        
         # Gemini에게 전달할 프롬프트 생성
-        prompt = f"""
-당신은 YouTube 크리에이터 성장 전문 컨설턴트입니다. 다음 채널 정보를 분석하고 한국 시장에 맞는 구체적인 성장 전략을 제안해주세요.
+        prompt = f"""당신은 YouTube 크리에이터 성장 전문 컨설턴트입니다. 다음 채널의 **실제 영상 데이터**를 분석하고 한국 시장에 맞는 **구체적이고 실용적인** 성장 전략을 제안해주세요.
 
-**채널 정보:**
+**채널 기본 정보:**
 - 채널명: {channel_data.get('title', 'N/A')}
-- 구독자 수: {channel_data.get('subscriberCount', 'N/A')}
-- 동영상 수: {channel_data.get('videoCount', 'N/A')}
-- 총 조회수: {channel_data.get('viewCount', 'N/A')}
-- 채널 설명: {channel_data.get('description', 'N/A')[:500]}
+- 구독자 수: {channel_data.get('stats', {}).get('subscribers', 'N/A')}
+- 총 동영상 수: {channel_data.get('stats', {}).get('videos', 'N/A')}
+- 총 조회수: {channel_data.get('stats', {}).get('views', 'N/A')}
+- 채널 설명: {channel_data.get('description', 'N/A')}
 
-**분석 요청사항:**
+**최근 30개 영상 분석 결과:**
+- 평균 조회수: {int(avg_views):,}
+- 평균 좋아요: {int(avg_likes):,}
+- 평균 참여율: {avg_engagement:.2f}%
 
-1. **채널 현황 분석**
-   - 현재 채널의 강점과 약점
-   - 구독자 대비 조회수 비율 분석
-   - 콘텐츠 업로드 빈도 평가
+**인기 영상 Top 5:**
+{chr(10).join([f"{i+1}. {v['title']} - 조회수: {v['views']:,}, 좋아요: {v['likes']:,}" for i, v in enumerate(top_5_videos)])}
 
-2. **성장 전략 (SMART 목표)**
-   - 단기 목표 (1-3개월): 구체적인 수치와 실행 방법
-   - 중기 목표 (3-6개월): 채널 확장 전략
-   - 장기 목표 (6-12개월): 브랜드 구축 방향
+**저조한 영상 Bottom 5:**
+{chr(10).join([f"{i+1}. {v['title']} - 조회수: {v['views']:,}, 좋아요: {v['likes']:,}" for i, v in enumerate(bottom_5_videos)])}
 
-3. **콘텐츠 전략**
-   - 추천 콘텐츠 유형 3가지
-   - 업로드 최적 시간대
-   - 썸네일 및 제목 전략
+**분석 요청:**
+1. **인기 영상 패턴 분석**: Top 5 영상의 제목에서 공통 키워드, 주제, 패턴을 찾아주세요.
+2. **저조한 영상 원인 분석**: Bottom 5 영상이 왜 성과가 낮은지 분석해주세요.
+3. **구체적인 개선 방안**: 
+   - 어떤 주제/키워드를 더 다뤄야 하는지
+   - 제목 작성 팁 (실제 인기 영상 제목 패턴 기반)
+   - 콘텐츠 방향성
+4. **단기 액션 아이템 (1개월)**: 즉시 실행 가능한 3가지
+5. **중기 목표 (3개월)**: 채널 성장을 위한 구체적 목표
 
-4. **한국 시장 맞춤 조언**
-   - 한국 시청자 선호도 반영
-   - 트렌드 활용 방법
-   - 커뮤니티 관리 전략
+**출력 형식:**
+### 1. 채널 특징 및 강점
+(이 채널만의 특징과 강점)
 
-5. **실행 가능한 액션 아이템 (Top 5)**
-   - 즉시 실행 가능한 구체적인 행동 목록
+### 2. 인기 영상 성공 요인
+(Top 5 영상의 공통 패턴과 성공 요인)
 
-**응답 형식:** 마크다운 형식으로 구조화하여 작성해주세요. 이모지를 적절히 사용하여 가독성을 높여주세요.
-"""
-        
+### 3. 개선이 필요한 부분
+(Bottom 5 영상의 문제점과 개선 방향)
+
+### 4. 맞춤형 성장 전략
+(구체적인 콘텐츠 방향, 제목 작성법, 키워드 전략)
+
+### 5. 실행 계획
+**단기 (1개월):**
+1. [구체적인 액션]
+2. [구체적인 액션]
+3. [구체적인 액션]
+
+**중기 (3개월):**
+- [구체적인 목표]
+
+한국어로 작성하고, 실제 데이터에 기반한 구체적이고 실용적인 조언을 제공해주세요."""
+
         # Gemini API 호출
-        analysis = call_gemini_api(prompt, api_key)
+        analysis = call_gemini_api(prompt, gemini_api_key)
         
-        if not analysis:
+        if analysis:
+            return jsonify({'analysis': analysis})
+        else:
             return jsonify({'error': 'Failed to generate analysis'}), 500
-        
-        return jsonify({
-            'analysis': analysis,
-            'channel_name': channel_data.get('title', 'Unknown')
-        })
-        
+    
     except Exception as e:
         print(f"Error in analyze_channel: {e}")
-        return jsonify({'error': f'Analysis failed: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @ai_bp.route('/content-ideas', methods=['POST'])
-def content_ideas():
-    """콘텐츠 아이디어 생성"""
+def generate_content_ideas():
+    """콘텐츠 아이디어 생성 (실제 영상 데이터 기반)"""
     
-    api_key = get_gemini_api_key()
+    gemini_api_key = get_gemini_api_key()
+    youtube_api_key = get_youtube_api_key()
     
-    if not api_key:
-        return jsonify({'error': 'Gemini API not available'}), 503
+    if not gemini_api_key or not youtube_api_key:
+        return jsonify({'error': 'API keys not configured'}), 503
     
     try:
         channel_data = request.json
@@ -159,47 +273,60 @@ def content_ideas():
         if not channel_data:
             return jsonify({'error': 'No channel data provided'}), 400
         
-        prompt = f"""
-당신은 YouTube 콘텐츠 기획 전문가입니다. 다음 채널을 위한 창의적이고 실행 가능한 콘텐츠 아이디어 10개를 제안해주세요.
+        channel_id = channel_data.get('id')
+        if not channel_id:
+            return jsonify({'error': 'Channel ID not provided'}), 400
+        
+        # 실제 영상 데이터 가져오기
+        videos = get_channel_videos(channel_id, youtube_api_key, max_results=20)
+        
+        if not videos:
+            return jsonify({'error': 'Failed to fetch channel videos'}), 500
+        
+        videos_sorted = sorted(videos, key=lambda x: x['views'], reverse=True)
+        top_videos = videos_sorted[:10]
+        
+        prompt = f"""당신은 YouTube 콘텐츠 기획 전문가입니다. 다음 채널의 **실제 인기 영상 데이터**를 분석하여 이 채널 스타일에 맞는 새로운 콘텐츠 아이디어 10개를 제안해주세요.
 
 **채널 정보:**
 - 채널명: {channel_data.get('title', 'N/A')}
-- 구독자 수: {channel_data.get('subscriberCount', 'N/A')}
-- 채널 설명: {channel_data.get('description', 'N/A')[:500]}
+- 채널 설명: {channel_data.get('description', 'N/A')}
 
-**요구사항:**
-1. 각 아이디어는 구체적이고 실행 가능해야 합니다
-2. 한국 시청자를 타겟으로 합니다
-3. 현재 트렌드를 반영합니다
-4. 채널의 정체성과 일치해야 합니다
+**인기 영상 Top 10:**
+{chr(10).join([f"{i+1}. {v['title']} (조회수: {v['views']:,})" for i, v in enumerate(top_videos)])}
 
-**응답 형식:**
-각 아이디어를 다음 형식으로 작성해주세요:
+**요청사항:**
+1. 위 인기 영상들의 패턴을 분석하세요
+2. 이 채널의 스타일과 시청자 취향에 맞는 새로운 아이디어 10개를 제안하세요
+3. 각 아이디어는 기존 인기 영상의 성공 요소를 활용하되, 새로운 각도로 접근하세요
 
-### 아이디어 1: [제목]
-**설명:** [1-2문장으로 아이디어 설명]
-**예상 효과:** [조회수, 참여도 등]
-**제작 난이도:** ⭐⭐⭐ (1-5)
+**출력 형식:**
+### 콘텐츠 아이디어 10개
 
-(총 10개의 아이디어)
-"""
+**아이디어 1:**
+- **제목**: [50자 이내, 클릭을 유도하는 제목]
+- **개요**: [어떤 내용인지 2-3줄]
+- **인기 영상과의 연결**: [어떤 인기 영상의 성공 요소를 활용하는지]
+- **예상 효과**: [왜 이 영상이 잘 될 것인지]
+- **제작 난이도**: ⭐⭐⭐ (별 1~5개)
+
+(아이디어 2~10도 동일한 형식)
+
+한국어로 작성하고, 이 채널의 실제 데이터에 기반한 구체적인 아이디어를 제공해주세요."""
+
+        ideas = call_gemini_api(prompt, gemini_api_key)
         
-        ideas = call_gemini_api(prompt, api_key)
-        
-        if not ideas:
-            return jsonify({'error': 'Failed to generate content ideas'}), 500
-        
-        return jsonify({
-            'ideas': ideas,
-            'channel_name': channel_data.get('title', 'Unknown')
-        })
-        
+        if ideas:
+            return jsonify({'ideas': ideas})
+        else:
+            return jsonify({'error': 'Failed to generate ideas'}), 500
+    
     except Exception as e:
-        print(f"Error in content_ideas: {e}")
-        return jsonify({'error': f'Failed to generate ideas: {str(e)}'}), 500
+        print(f"Error in generate_content_ideas: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @ai_bp.route('/title-optimizer', methods=['POST'])
-def title_optimizer():
+def optimize_title():
     """제목 최적화"""
     
     api_key = get_gemini_api_key()
@@ -209,134 +336,44 @@ def title_optimizer():
     
     try:
         data = request.json
-        original_title = data.get('title', '')
+        title = data.get('title', '')
         
-        if not original_title:
+        if not title:
             return jsonify({'error': 'No title provided'}), 400
         
-        prompt = f"""
-당신은 YouTube SEO 및 제목 최적화 전문가입니다. 다음 제목을 분석하고 클릭률(CTR)을 높일 수 있는 개선된 제목 5개를 제안해주세요.
+        prompt = f"""당신은 YouTube 제목 최적화 전문가입니다. 다음 제목을 분석하고 클릭률(CTR)을 높일 수 있는 개선된 제목 5개를 제안해주세요.
 
-**원본 제목:** {original_title}
+**원본 제목:**
+{title}
 
-**최적화 기준:**
-1. 50자 이내로 작성
-2. 한국어 키워드 최적화
-3. 감정적 트리거 활용
-4. 호기심 유발
-5. 검색 최적화 (SEO)
+**요청사항:**
+1. 원본 제목의 강점과 약점을 분석하세요
+2. 클릭률을 높일 수 있는 개선된 제목 5개를 제안하세요
+3. 각 제목은 50자 이내로 작성하세요
+4. 한국 YouTube 시청자에게 효과적인 제목을 작성하세요
 
-**응답 형식:**
+**출력 형식:**
+### 원본 제목 분석
+- 강점: [분석]
+- 약점: [분석]
 
-### 제안 1: [최적화된 제목]
-**개선 포인트:** [어떤 부분을 개선했는지]
-**예상 효과:** [CTR 향상 예상]
+### 개선된 제목 5개
+1. [제목] - [왜 이 제목이 더 좋은지 설명]
+2. [제목] - [설명]
+3. [제목] - [설명]
+4. [제목] - [설명]
+5. [제목] - [설명]
 
-(총 5개의 제안)
+한국어로 작성해주세요."""
 
-### 추가 조언
-[제목 작성 시 주의사항 및 팁]
-"""
+        result = call_gemini_api(prompt, api_key)
         
-        optimized = call_gemini_api(prompt, api_key)
-        
-        if not optimized:
+        if result:
+            return jsonify({'result': result})
+        else:
             return jsonify({'error': 'Failed to optimize title'}), 500
-        
-        return jsonify({
-            'optimized': optimized,
-            'original_title': original_title
-        })
-        
+    
     except Exception as e:
-        print(f"Error in title_optimizer: {e}")
-        return jsonify({'error': f'Failed to optimize title: {str(e)}'}), 500
-
-@ai_bp.route('/competitor-analysis', methods=['POST'])
-def competitor_analysis():
-    """경쟁 채널 분석"""
-    
-    api_key = get_gemini_api_key()
-    
-    if not api_key:
-        return jsonify({'error': 'Gemini API not available'}), 503
-    
-    try:
-        data = request.json
-        my_channel = data.get('my_channel', {})
-        competitor_channels = data.get('competitors', [])
-        
-        prompt = f"""
-당신은 YouTube 시장 분석 전문가입니다. 다음 채널들을 비교 분석하고 경쟁 전략을 제안해주세요.
-
-**내 채널:**
-- 채널명: {my_channel.get('title', 'N/A')}
-- 구독자: {my_channel.get('subscriberCount', 'N/A')}
-
-**경쟁 채널 정보:**
-{json.dumps(competitor_channels, ensure_ascii=False, indent=2)}
-
-**분석 요청:**
-1. 경쟁 채널의 성공 요인
-2. 내 채널과의 차별화 포인트
-3. 벤치마킹 전략
-4. 시장 포지셔닝 제안
-
-**응답 형식:** 마크다운으로 구조화하여 작성
-"""
-        
-        analysis = call_gemini_api(prompt, api_key)
-        
-        if not analysis:
-            return jsonify({'error': 'Failed to analyze competitors'}), 500
-        
-        return jsonify({
-            'analysis': analysis
-        })
-        
-    except Exception as e:
-        print(f"Error in competitor_analysis: {e}")
-        return jsonify({'error': f'Failed to analyze: {str(e)}'}), 500
-
-@ai_bp.route('/thumbnail-analysis', methods=['POST'])
-def thumbnail_analysis():
-    """썸네일 분석 및 개선 제안"""
-    
-    api_key = get_gemini_api_key()
-    
-    if not api_key:
-        return jsonify({'error': 'Gemini API not available'}), 503
-    
-    try:
-        data = request.json
-        thumbnail_url = data.get('thumbnail_url', '')
-        video_title = data.get('video_title', '')
-        
-        prompt = f"""
-당신은 YouTube 썸네일 디자인 전문가입니다. 다음 정보를 바탕으로 썸네일 개선 방안을 제안해주세요.
-
-**동영상 제목:** {video_title}
-**썸네일 URL:** {thumbnail_url}
-
-**분석 요청:**
-1. 현재 썸네일의 강점과 약점
-2. 클릭률 향상을 위한 개선 방안
-3. 한국 시청자에게 어필할 수 있는 디자인 요소
-4. 색상, 텍스트, 이미지 구성 제안
-
-**응답 형식:** 마크다운으로 구조화하여 작성
-"""
-        
-        analysis = call_gemini_api(prompt, api_key)
-        
-        if not analysis:
-            return jsonify({'error': 'Failed to analyze thumbnail'}), 500
-        
-        return jsonify({
-            'analysis': analysis
-        })
-        
-    except Exception as e:
-        print(f"Error in thumbnail_analysis: {e}")
-        return jsonify({'error': f'Failed to analyze thumbnail: {str(e)}'}), 500
+        print(f"Error in optimize_title: {e}")
+        return jsonify({'error': str(e)}), 500
 
