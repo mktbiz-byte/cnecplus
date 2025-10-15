@@ -19,26 +19,34 @@ def get_gemini_client():
     if not HAS_GEMINI:
         return None
     
-    # API 키 우선순위: 파일 > 환경변수
+    # API 키 우선순위: 환경변수 > 파일 > 하드코딩
     api_key = None
     
-    # 파일에서 로드
-    config_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json')
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, 'r') as f:
-                keys = json.load(f)
-                api_key = keys.get('gemini_api_key')
-        except:
-            pass
-    
     # 환경변수에서 로드
+    api_key = os.getenv('GEMINI_API_KEY')
+    
+    # 파일에서 로드
     if not api_key:
-        api_key = os.getenv('GEMINI_API_KEY')
+        config_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json')
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r') as f:
+                    keys = json.load(f)
+                    api_key = keys.get('gemini_api_key')
+            except Exception as e:
+                print(f"Error loading config file: {e}")
+    
+    # 하드코딩된 키 (테스트용)
+    if not api_key:
+        api_key = 'AIzaSyDuMT2mTZryMArPHuY9YK7RuCjBxF2Xlb8'
     
     if api_key:
-        genai.configure(api_key=api_key)
-        return genai.GenerativeModel('gemini-2.0-flash-exp')
+        try:
+            genai.configure(api_key=api_key)
+            return genai.GenerativeModel('gemini-2.0-flash-exp')
+        except Exception as e:
+            print(f"Error configuring Gemini: {e}")
+            return None
     
     return None
 
