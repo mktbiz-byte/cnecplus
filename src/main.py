@@ -16,6 +16,7 @@ from src.routes.ai_consultant import ai_bp
 from src.routes.admin import admin_bp, init_api_keys
 from src.routes.analytics import analytics_bp
 from src.routes.trends import trends_bp
+from src.routes.beauty import beauty_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
@@ -27,6 +28,7 @@ app.register_blueprint(ai_bp, url_prefix='/api/ai')
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
 app.register_blueprint(analytics_bp, url_prefix='/api/analytics')
 app.register_blueprint(trends_bp, url_prefix='/api/trends')
+app.register_blueprint(beauty_bp, url_prefix='/api/beauty')
 
 # 저장된 API 키 로드
 init_api_keys()

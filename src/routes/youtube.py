@@ -131,6 +131,8 @@ def get_channel_videos(channel_id):
         return jsonify({'error': 'YouTube API key not configured'}), 503
     
     try:
+        # 핸들(@) 또는 채널명을 채널 ID로 변환
+        channel_id = resolve_channel_id(channel_id, api_key)
         # 1. 채널의 업로드 플레이리스트 ID 가져오기
         channel_url = 'https://www.googleapis.com/youtube/v3/channels'
         channel_params = {
@@ -209,6 +211,8 @@ def get_hashtag_recommendations(channel_id):
         return jsonify({'error': 'YouTube API key not configured'}), 503
     
     try:
+        # 핸들(@) 또는 채널명을 채널 ID로 변환
+        channel_id = resolve_channel_id(channel_id, api_key)
         # 채널 정보 가져오기
         channel_url = 'https://www.googleapis.com/youtube/v3/channels'
         channel_params = {
