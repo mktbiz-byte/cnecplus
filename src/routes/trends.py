@@ -23,7 +23,6 @@ def get_youtube_api_key():
         api_key = os.getenv('YOUTUBE_API_KEY')
     
     return api_key
-
 def get_gemini_api_key():
     """Gemini API 키 가져오기"""
     api_key = None
@@ -42,6 +41,31 @@ def get_gemini_api_key():
     
     return api_key
 
+def resolve_channel_id(input_str, api_key):
+    """핸들(@) 또는 채널명을 채널 ID로 변환"""
+    if input_str.startswith('UC') and len(input_str) == 24:
+        return input_str
+    
+    if input_str.startswith('@'):
+        input_str = input_str[1:]
+    
+    url = 'https://www.googleapis.com/youtube/v3/search'
+    params = {
+        'part': 'snippet',
+        'q': input_str,
+        'type': 'channel',
+        'maxResults': 1,
+        'key': api_key
+    }
+    
+    response = requests.get(url, params=params)
+    
+    if response.status_code == 200:
+        data = response.json()
+        if data.get('items'):
+            return data['items'][0]['snippet']['channelId']
+    
+    return None
 @trends_bp.route('/youtube-trending', methods=['GET'])
 def get_youtube_trending():
     """YouTube 트렌딩 영상 가져오기 (한국)"""
@@ -89,6 +113,13 @@ def analyze_trends_for_creator(channel_id):
     
     if not youtube_api_key or not gemini_api_key:
         return jsonify({'error': 'API keys not configured'}), 503
+    
+    # 핸들(@) 또는 채널명을 채널 ID로 변환
+    resolved_id = resolve_channel_id(channel_id, youtube_api_key)
+    if not resolved_id:
+        return jsonify({'error': 'Channel not found'}), 404
+    
+    channel_id = resolved_id
     
     try:
         # 1. 크리에이터 채널 정보 가져오기

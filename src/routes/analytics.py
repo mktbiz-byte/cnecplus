@@ -26,6 +26,35 @@ def get_youtube_api_key():
     
     return api_key
 
+def resolve_channel_id(input_str, api_key):
+    """핸들(@) 또는 채널명을 채널 ID로 변환"""
+    # 이미 채널 ID 형식이면 그대로 반환
+    if input_str.startswith('UC') and len(input_str) == 24:
+        return input_str
+    
+    # @ 제거
+    if input_str.startswith('@'):
+        input_str = input_str[1:]
+    
+    # YouTube Data API v3의 search 엔드포인트 사용
+    url = 'https://www.googleapis.com/youtube/v3/search'
+    params = {
+        'part': 'snippet',
+        'q': input_str,
+        'type': 'channel',
+        'maxResults': 1,
+        'key': api_key
+    }
+    
+    response = requests.get(url, params=params)
+    
+    if response.status_code == 200:
+        data = response.json()
+        if data.get('items'):
+            return data['items'][0]['snippet']['channelId']
+    
+    return None
+
 @analytics_bp.route('/channel/<channel_id>/performance', methods=['GET'])
 def analyze_channel_performance(channel_id):
     """채널 성과 분석 - 실용적인 인사이트 제공"""
@@ -33,6 +62,13 @@ def analyze_channel_performance(channel_id):
     
     if not api_key:
         return jsonify({'error': 'YouTube API key not configured'}), 503
+    
+    # 핸들(@) 또는 채널명을 채널 ID로 변환
+    resolved_id = resolve_channel_id(channel_id, api_key)
+    if not resolved_id:
+        return jsonify({'error': 'Channel not found'}), 404
+    
+    channel_id = resolved_id
     
     try:
         # 1. 채널 정보 가져오기
