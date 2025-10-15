@@ -7,42 +7,147 @@ from flask import Blueprint, jsonify, request
 ai_bp = Blueprint('ai', __name__)
 
 # Gemini API 설정
+# API 키 로드 밸런싱을 위한 전역 변수
+_gemini_key_index = 0
+_gemini_keys_cache = None
+
+def get_gemini_api_keys():
+    """
+    환경변수에서 Gemini API 키 목록 가져오기
+    
+    환경변수 형식:
+    - GEMINI_API_KEY: 단일 키
+    - GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...: 여러 키
+    
+    Returns:
+        list: API 키 리스트
+    """
+    global _gemini_keys_cache
+    
+    # 캐시된 키가 있으면 반환
+    if _gemini_keys_cache is not None:
+        return _gemini_keys_cache
+    
+    api_keys = []
+    
+    # 단일 키 확인
+    single_key = os.getenv('GEMINI_API_KEY')
+    if single_key:
+        api_keys.append(single_key)
+    
+    # 여러 키 확인 (GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...)
+    index = 1
+    while True:
+        key = os.getenv(f'GEMINI_API_KEY_{index}')
+        if not key:
+            break
+        api_keys.append(key)
+        index += 1
+    
+    # 중복 제거
+    api_keys = list(set(api_keys))
+    
+    # 캐시 저장
+    _gemini_keys_cache = api_keys if api_keys else None
+    
+    return _gemini_keys_cache
+
 def get_gemini_api_key():
-    """Gemini API 키 가져오기"""
-    # 1. 환경변수에서 확인
-    api_key = os.getenv('GEMINI_API_KEY')
-    if api_key:
-        return api_key
+    """
+    Gemini API 키 가져오기 - 로드 밸런싱
     
-    # 2. config 파일에서 확인
-    try:
-        config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json')
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-                return config.get('gemini_api_key')
-    except Exception as e:
-        print(f"Error loading config: {e}")
+    여러 키가 있으면 라운드 로빈 방식으로 순환
     
-    return None
+    Returns:
+        str: API 키
+    """
+    global _gemini_key_index
+    
+    api_keys = get_gemini_api_keys()
+    
+    if not api_keys:
+        return None
+    
+    # 단일 키면 바로 반환
+    if len(api_keys) == 1:
+        return api_keys[0]
+    
+    # 여러 키면 라운드 로빈
+    key = api_keys[_gemini_key_index % len(api_keys)]
+    _gemini_key_index += 1
+    
+    return key
+
+# YouTube API 키 로드 밸런싱을 위한 전역 변수
+_youtube_key_index = 0
+_youtube_keys_cache = None
+
+def get_youtube_api_keys():
+    """
+    환경변수에서 YouTube API 키 목록 가져오기
+    
+    환경변수 형식:
+    - YOUTUBE_API_KEY: 단일 키
+    - YOUTUBE_API_KEY_1, YOUTUBE_API_KEY_2, ...: 여러 키
+    
+    Returns:
+        list: API 키 리스트
+    """
+    global _youtube_keys_cache
+    
+    # 캐시된 키가 있으면 반환
+    if _youtube_keys_cache is not None:
+        return _youtube_keys_cache
+    
+    api_keys = []
+    
+    # 단일 키 확인
+    single_key = os.getenv('YOUTUBE_API_KEY')
+    if single_key:
+        api_keys.append(single_key)
+    
+    # 여러 키 확인 (YOUTUBE_API_KEY_1, YOUTUBE_API_KEY_2, ...)
+    index = 1
+    while True:
+        key = os.getenv(f'YOUTUBE_API_KEY_{index}')
+        if not key:
+            break
+        api_keys.append(key)
+        index += 1
+    
+    # 중복 제거
+    api_keys = list(set(api_keys))
+    
+    # 캐시 저장
+    _youtube_keys_cache = api_keys if api_keys else None
+    
+    return _youtube_keys_cache
 
 def get_youtube_api_key():
-    """YouTube API 키 가져오기"""
-    api_key = None
+    """
+    YouTube API 키 가져오기 - 로드 밸런싱
     
-    config_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json')
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, 'r') as f:
-                keys = json.load(f)
-                api_key = keys.get('youtube_api_key')
-        except:
-            pass
+    여러 키가 있으면 라운드 로빈 방식으로 순환
     
-    if not api_key:
-        api_key = os.getenv('YOUTUBE_API_KEY')
+    Returns:
+        str: API 키
+    """
+    global _youtube_key_index
     
-    return api_key
+    api_keys = get_youtube_api_keys()
+    
+    if not api_keys:
+        return None
+    
+    # 단일 키면 바로 반환
+    if len(api_keys) == 1:
+        return api_keys[0]
+    
+    # 여러 키면 라운드 로빈
+    key = api_keys[_youtube_key_index % len(api_keys)]
+    _youtube_key_index += 1
+    
+    return key
 
 def call_gemini_api(prompt, api_key):
     """Gemini REST API 직접 호출"""
