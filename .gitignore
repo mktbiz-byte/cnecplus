@@ -13,3 +13,27 @@ env/
 .vscode/
 .idea/
 
+
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+src/database/*.db
+
+# API Keys
+src/config/api_keys.json
+
+# Build files
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.temp
+
