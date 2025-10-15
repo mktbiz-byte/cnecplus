@@ -53,9 +53,20 @@ def get_gemini_client():
 @ai_bp.route('/analyze', methods=['POST'])
 def analyze_channel():
     """채널 분석 및 AI 기반 성장 전략 제안 (Gemini 2.0 Flash)"""
+    
+    # 디버깅 정보
+    debug_info = {
+        'has_gemini': HAS_GEMINI,
+        'gemini_api_key_set': bool(os.getenv('GEMINI_API_KEY')),
+        'config_file_exists': os.path.exists(os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json'))
+    }
+    
     gemini_model = get_gemini_client()
     if not gemini_model:
-        return jsonify({'error': 'Gemini API not available. Please configure GEMINI_API_KEY'}), 503
+        return jsonify({
+            'error': 'Gemini API not available. Please configure GEMINI_API_KEY',
+            'debug': debug_info
+        }), 503
     
     try:
         # 프론트엔드에서 채널 데이터 받기
