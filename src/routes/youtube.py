@@ -1,17 +1,34 @@
 import sys
-sys.path.append('/opt/.manus/.sandbox-runtime')
+import os
+
+# data_api 경로 추가
+data_api_path = '/opt/.manus/.sandbox-runtime'
+if os.path.exists(data_api_path) and data_api_path not in sys.path:
+    sys.path.append(data_api_path)
 
 from flask import Blueprint, jsonify, request
-from data_api import ApiClient
+
+try:
+    from data_api import ApiClient
+    HAS_DATA_API = True
+except ImportError:
+    HAS_DATA_API = False
+    print("Warning: data_api not available, using fallback methods")
 from collections import Counter
 import re
 
 youtube_bp = Blueprint('youtube', __name__)
-client = ApiClient()
+
+if HAS_DATA_API:
+    client = ApiClient()
+else:
+    client = None
 
 @youtube_bp.route('/channel/<channel_id>', methods=['GET'])
 def get_channel_info(channel_id):
     """채널 상세 정보 조회"""
+    if not HAS_DATA_API or client is None:
+        return jsonify({'error': 'YouTube API not available'}), 503
     try:
         query_params = {
             'id': channel_id,
@@ -48,6 +65,8 @@ def get_channel_info(channel_id):
 @youtube_bp.route('/channel/<channel_id>/videos', methods=['GET'])
 def get_channel_videos(channel_id):
     """채널의 비디오 목록 조회"""
+    if not HAS_DATA_API or client is None:
+        return jsonify({'error': 'YouTube API not available'}), 503
     try:
         filter_type = request.args.get('filter', 'videos_latest')
         cursor = request.args.get('cursor', None)
@@ -95,6 +114,8 @@ def get_channel_videos(channel_id):
 @youtube_bp.route('/search', methods=['GET'])
 def search_videos():
     """비디오 검색"""
+    if not HAS_DATA_API or client is None:
+        return jsonify({'error': 'YouTube API not available'}), 503
     try:
         query = request.args.get('q', '')
         cursor = request.args.get('cursor', None)
@@ -159,6 +180,8 @@ def search_videos():
 @youtube_bp.route('/recommendations/hashtags/<channel_id>', methods=['GET'])
 def recommend_hashtags(channel_id):
     """채널 기반 해시태그 추천"""
+    if not HAS_DATA_API or client is None:
+        return jsonify({'error': 'YouTube API not available'}), 503
     try:
         # 채널의 최신 비디오 가져오기
         query_params = {
@@ -205,6 +228,8 @@ def recommend_hashtags(channel_id):
 @youtube_bp.route('/recommendations/topics/<channel_id>', methods=['GET'])
 def recommend_topics(channel_id):
     """채널 기반 주제 추천"""
+    if not HAS_DATA_API or client is None:
+        return jsonify({'error': 'YouTube API not available'}), 503
     try:
         # 채널 정보 가져오기
         channel_params = {
@@ -265,6 +290,8 @@ def recommend_topics(channel_id):
 @youtube_bp.route('/trends', methods=['GET'])
 def get_trending():
     """트렌드 비디오 조회 (검색 기반)"""
+    if not HAS_DATA_API or client is None:
+        return jsonify({'error': 'YouTube API not available'}), 503
     try:
         # 인기 키워드로 검색 (한국 기준)
         trending_keywords = ['인기', '트렌드', '화제', 'viral', 'trending']
