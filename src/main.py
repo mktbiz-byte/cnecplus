@@ -10,6 +10,8 @@ from src.routes.user import user_bp
 from src.routes.youtube import youtube_bp
 from src.routes.ai_consultant import ai_bp
 from src.routes.admin import admin_bp, init_api_keys
+from src.routes.analytics import analytics_bp
+from src.routes.trends import trends_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
@@ -19,6 +21,8 @@ app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(youtube_bp, url_prefix='/api/youtube')
 app.register_blueprint(ai_bp, url_prefix='/api/ai')
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
+app.register_blueprint(analytics_bp, url_prefix='/api/analytics')
+app.register_blueprint(trends_bp, url_prefix='/api/trends')
 
 # 저장된 API 키 로드
 init_api_keys()
