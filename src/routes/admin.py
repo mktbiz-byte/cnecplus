@@ -14,15 +14,26 @@ def ensure_config_dir():
         os.makedirs(config_dir)
 
 def load_api_keys():
-    """저장된 API 키 로드"""
-    ensure_config_dir()
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
+    """저장된 API 키 로드 (환경변수 우선)"""
+    keys = {}
+    
+    # 환경변수에서 먼저 로드
+    if os.getenv('GEMINI_API_KEY'):
+        keys['gemini_api_key'] = os.getenv('GEMINI_API_KEY')
+    if os.getenv('YOUTUBE_API_KEY'):
+        keys['youtube_api_key'] = os.getenv('YOUTUBE_API_KEY')
+    
+    # 환경변수에 없으면 파일에서 로드
+    if not keys:
+        ensure_config_dir()
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, 'r') as f:
+                    return json.load(f)
+            except:
+                pass
+    
+    return keys
 
 def save_api_keys(keys):
     """API 키 저장"""
