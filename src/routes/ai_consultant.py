@@ -15,8 +15,14 @@ except ImportError:
     HAS_DATA_API = False
     print("Warning: data_api not available")
 
-from openai import OpenAI
 import json
+
+try:
+    from openai import OpenAI
+    HAS_OPENAI = True
+except ImportError:
+    HAS_OPENAI = False
+    print("Warning: OpenAI not available")
 
 ai_bp = Blueprint('ai', __name__)
 
@@ -26,13 +32,18 @@ else:
     youtube_client = None
 
 # Gemini 2.5 Flash 사용 (OpenAI 호환 API)
-openai_client = OpenAI()
+if HAS_OPENAI:
+    openai_client = OpenAI()
+else:
+    openai_client = None
 
 @ai_bp.route('/analyze/<channel_id>', methods=['GET'])
 def analyze_channel(channel_id):
     """채널 분석 및 AI 기반 성장 전략 제안 (Gemini 2.5 Flash)"""
     if not HAS_DATA_API or youtube_client is None:
         return jsonify({'error': 'YouTube API not available'}), 503
+    if not HAS_OPENAI or openai_client is None:
+        return jsonify({'error': 'AI service not available'}), 503
     
     try:
         # 1. 채널 정보 가져오기
@@ -130,6 +141,8 @@ def generate_content_ideas(channel_id):
     """채널 스타일 기반 콘텐츠 아이디어 생성 (Gemini 2.5 Flash)"""
     if not HAS_DATA_API or youtube_client is None:
         return jsonify({'error': 'YouTube API not available'}), 503
+    if not HAS_OPENAI or openai_client is None:
+        return jsonify({'error': 'AI service not available'}), 503
     
     try:
         # 채널 정보 가져오기
@@ -208,6 +221,8 @@ def generate_content_ideas(channel_id):
 @ai_bp.route('/title-optimizer', methods=['POST'])
 def optimize_title():
     """영상 제목 최적화 (Gemini 2.5 Flash)"""
+    if not HAS_OPENAI or openai_client is None:
+        return jsonify({'error': 'AI service not available'}), 503
     try:
         data = request.get_json()
         original_title = data.get('title', '')
@@ -261,6 +276,8 @@ def analyze_competitors():
     """경쟁 채널 분석 (Gemini 2.5 Flash)"""
     if not HAS_DATA_API or youtube_client is None:
         return jsonify({'error': 'YouTube API not available'}), 503
+    if not HAS_OPENAI or openai_client is None:
+        return jsonify({'error': 'AI service not available'}), 503
     
     try:
         data = request.get_json()
@@ -343,6 +360,8 @@ def analyze_competitors():
 @ai_bp.route('/thumbnail-analysis', methods=['POST'])
 def analyze_thumbnail():
     """썸네일 분석 및 개선 제안 (Gemini 2.5 Flash - 멀티모달)"""
+    if not HAS_OPENAI or openai_client is None:
+        return jsonify({'error': 'AI service not available'}), 503
     try:
         data = request.get_json()
         thumbnail_url = data.get('thumbnailUrl', '')
