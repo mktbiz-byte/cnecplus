@@ -5,7 +5,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, send_from_directory
 from flask_cors import CORS
+from dotenv import load_dotenv
 from src.models.user import db
+
+# .env 파일 로드
+load_dotenv()
 from src.routes.user import user_bp
 from src.routes.youtube import youtube_bp
 from src.routes.ai_consultant import ai_bp
