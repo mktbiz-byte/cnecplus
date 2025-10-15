@@ -18,11 +18,11 @@ except ImportError:
 import json
 
 try:
-    from openai import OpenAI
-    HAS_OPENAI = True
+    import google.generativeai as genai
+    HAS_GEMINI = True
 except ImportError:
-    HAS_OPENAI = False
-    print("Warning: OpenAI not available")
+    HAS_GEMINI = False
+    print("Warning: google-generativeai not available")
 
 ai_bp = Blueprint('ai', __name__)
 
@@ -31,19 +31,44 @@ if HAS_DATA_API:
 else:
     youtube_client = None
 
-# Gemini 2.5 Flash 사용 (OpenAI 호환 API)
-if HAS_OPENAI:
-    openai_client = OpenAI()
-else:
-    openai_client = None
+# Gemini API 설정
+def get_gemini_client():
+    """Gemini 클라이언트 가져오기"""
+    if not HAS_GEMINI:
+        return None
+    
+    # API 키 우선순위: 파일 > 환경변수
+    api_key = None
+    
+    # 파일에서 로드
+    config_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json')
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, 'r') as f:
+                keys = json.load(f)
+                api_key = keys.get('gemini_api_key')
+        except:
+            pass
+    
+    # 환경변수에서 로드
+    if not api_key:
+        api_key = os.getenv('GEMINI_API_KEY')
+    
+    if api_key:
+        genai.configure(api_key=api_key)
+        return genai.GenerativeModel('gemini-2.0-flash-exp')
+    
+    return None
 
 @ai_bp.route('/analyze/<channel_id>', methods=['GET'])
 def analyze_channel(channel_id):
-    """채널 분석 및 AI 기반 성장 전략 제안 (Gemini 2.5 Flash)"""
+    """채널 분석 및 AI 기반 성장 전략 제안 (Gemini 2.0 Flash)"""
     if not HAS_DATA_API or youtube_client is None:
         return jsonify({'error': 'YouTube API not available'}), 503
-    if not HAS_OPENAI or openai_client is None:
-        return jsonify({'error': 'AI service not available'}), 503
+    
+    gemini_model = get_gemini_client()
+    if not gemini_model:
+        return jsonify({'error': 'Gemini API not available. Please configure GEMINI_API_KEY'}), 503
     
     try:
         # 1. 채널 정보 가져오기
@@ -109,18 +134,9 @@ def analyze_channel(channel_id):
 한국 크리에이터를 위한 실용적이고 구체적인 조언을 제공해주세요.
 마크다운 형식으로 작성하되, 이모지나 특수문자는 사용하지 마세요."""
 
-        # Gemini 2.5 Flash 호출
-        response = openai_client.chat.completions.create(
-            model="gemini-2.5-flash",
-            messages=[
-                {"role": "system", "content": "당신은 한국 YouTube 크리에이터 성장 전문 컨설턴트입니다."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=2000,
-            temperature=0.7
-        )
-        
-        analysis = response.choices[0].message.content
+        # Gemini API 호출
+        response = gemini_model.generate_content(prompt)
+        analysis = response.text
         
         return jsonify({
             'analysis': analysis,
@@ -138,11 +154,13 @@ def analyze_channel(channel_id):
 
 @ai_bp.route('/content-ideas/<channel_id>', methods=['GET'])
 def generate_content_ideas(channel_id):
-    """채널 스타일 기반 콘텐츠 아이디어 생성 (Gemini 2.5 Flash)"""
+    """채널 스타일 기반 콘텐츠 아이디어 생성 (Gemini 2.0 Flash)"""
     if not HAS_DATA_API or youtube_client is None:
         return jsonify({'error': 'YouTube API not available'}), 503
-    if not HAS_OPENAI or openai_client is None:
-        return jsonify({'error': 'AI service not available'}), 503
+    
+    gemini_model = get_gemini_client()
+    if not gemini_model:
+        return jsonify({'error': 'Gemini API not available'}), 503
     
     try:
         # 채널 정보 가져오기
@@ -197,17 +215,8 @@ def generate_content_ideas(channel_id):
 
 이모지나 특수문자는 사용하지 마세요."""
 
-        response = openai_client.chat.completions.create(
-            model="gemini-2.5-flash",
-            messages=[
-                {"role": "system", "content": "당신은 창의적인 YouTube 콘텐츠 기획자입니다."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=2500,
-            temperature=0.8
-        )
-        
-        ideas = response.choices[0].message.content
+        response = gemini_model.generate_content(prompt)
+        ideas = response.text
         
         return jsonify({
             'ideas': ideas,
@@ -220,9 +229,11 @@ def generate_content_ideas(channel_id):
 
 @ai_bp.route('/title-optimizer', methods=['POST'])
 def optimize_title():
-    """영상 제목 최적화 (Gemini 2.5 Flash)"""
-    if not HAS_OPENAI or openai_client is None:
-        return jsonify({'error': 'AI service not available'}), 503
+    """영상 제목 최적화 (Gemini 2.0 Flash)"""
+    gemini_model = get_gemini_client()
+    if not gemini_model:
+        return jsonify({'error': 'Gemini API not available'}), 503
+    
     try:
         data = request.get_json()
         original_title = data.get('title', '')
@@ -250,17 +261,8 @@ def optimize_title():
 
 이모지나 특수문자는 사용하지 마세요."""
 
-        response = openai_client.chat.completions.create(
-            model="gemini-2.5-flash",
-            messages=[
-                {"role": "system", "content": "당신은 YouTube SEO 및 클릭률 최적화 전문가입니다."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=1000,
-            temperature=0.7
-        )
-        
-        optimized_titles = response.choices[0].message.content
+        response = gemini_model.generate_content(prompt)
+        optimized_titles = response.text
         
         return jsonify({
             'originalTitle': original_title,
@@ -273,11 +275,13 @@ def optimize_title():
 
 @ai_bp.route('/competitor-analysis', methods=['POST'])
 def analyze_competitors():
-    """경쟁 채널 분석 (Gemini 2.5 Flash)"""
+    """경쟁 채널 분석 (Gemini 2.0 Flash)"""
     if not HAS_DATA_API or youtube_client is None:
         return jsonify({'error': 'YouTube API not available'}), 503
-    if not HAS_OPENAI or openai_client is None:
-        return jsonify({'error': 'AI service not available'}), 503
+    
+    gemini_model = get_gemini_client()
+    if not gemini_model:
+        return jsonify({'error': 'Gemini API not available'}), 503
     
     try:
         data = request.get_json()
@@ -335,17 +339,8 @@ def analyze_competitors():
 한국 시장에 맞는 실용적인 조언을 제공해주세요.
 이모지나 특수문자는 사용하지 마세요."""
 
-        response = openai_client.chat.completions.create(
-            model="gemini-2.5-flash",
-            messages=[
-                {"role": "system", "content": "당신은 YouTube 채널 전략 분석 전문가입니다."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=2000,
-            temperature=0.7
-        )
-        
-        analysis = response.choices[0].message.content
+        response = gemini_model.generate_content(prompt)
+        analysis = response.text
         
         return jsonify({
             'analysis': analysis,
@@ -359,9 +354,11 @@ def analyze_competitors():
 
 @ai_bp.route('/thumbnail-analysis', methods=['POST'])
 def analyze_thumbnail():
-    """썸네일 분석 및 개선 제안 (Gemini 2.5 Flash - 멀티모달)"""
-    if not HAS_OPENAI or openai_client is None:
-        return jsonify({'error': 'AI service not available'}), 503
+    """썸네일 분석 및 개선 제안 (Gemini 2.0 Flash - 멀티모달)"""
+    gemini_model = get_gemini_client()
+    if not gemini_model:
+        return jsonify({'error': 'Gemini API not available'}), 503
+    
     try:
         data = request.get_json()
         thumbnail_url = data.get('thumbnailUrl', '')
@@ -370,7 +367,6 @@ def analyze_thumbnail():
         if not thumbnail_url:
             return jsonify({'error': 'Thumbnail URL is required'}), 400
         
-        # Gemini는 이미지 분석 가능 (멀티모달)
         prompt = f"""당신은 YouTube 썸네일 디자인 전문가입니다.
 다음 썸네일 이미지를 분석하여 개선 방안을 제안해주세요.
 
@@ -386,18 +382,8 @@ def analyze_thumbnail():
 
 이모지나 특수문자는 사용하지 마세요."""
 
-        # 이미지 URL을 포함한 멀티모달 요청
-        response = openai_client.chat.completions.create(
-            model="gemini-2.5-flash",
-            messages=[
-                {"role": "system", "content": "당신은 YouTube 썸네일 디자인 전문가입니다."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=1500,
-            temperature=0.7
-        )
-        
-        analysis = response.choices[0].message.content
+        response = gemini_model.generate_content(prompt)
+        analysis = response.text
         
         return jsonify({
             'analysis': analysis,

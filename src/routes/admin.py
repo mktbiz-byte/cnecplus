@@ -32,8 +32,8 @@ def save_api_keys(keys):
 
 def update_env_variables(keys):
     """환경변수 업데이트"""
-    if keys.get('openai_api_key'):
-        os.environ['OPENAI_API_KEY'] = keys['openai_api_key']
+    if keys.get('gemini_api_key'):
+        os.environ['GEMINI_API_KEY'] = keys['gemini_api_key']
     if keys.get('youtube_api_key'):
         os.environ['YOUTUBE_API_KEY'] = keys['youtube_api_key']
 
@@ -45,11 +45,11 @@ def get_api_keys():
         
         # API 키 마스킹 (보안)
         masked_keys = {}
-        if keys.get('openai_api_key'):
-            key = keys['openai_api_key']
-            masked_keys['openai_api_key'] = f"{key[:7]}...{key[-4:]}" if len(key) > 11 else "***"
+        if keys.get('gemini_api_key'):
+            key = keys['gemini_api_key']
+            masked_keys['gemini_api_key'] = f"{key[:7]}...{key[-4:]}" if len(key) > 11 else "***"
         else:
-            masked_keys['openai_api_key'] = None
+            masked_keys['gemini_api_key'] = None
             
         if keys.get('youtube_api_key'):
             key = keys['youtube_api_key']
@@ -59,7 +59,7 @@ def get_api_keys():
         
         return jsonify({
             'keys': masked_keys,
-            'hasOpenAI': bool(keys.get('openai_api_key')),
+            'hasGemini': bool(keys.get('gemini_api_key')),
             'hasYouTube': bool(keys.get('youtube_api_key'))
         })
     except Exception as e:
@@ -73,9 +73,9 @@ def save_api_keys_endpoint():
         
         keys = load_api_keys()
         
-        # OpenAI API 키 업데이트
-        if 'openai_api_key' in data and data['openai_api_key']:
-            keys['openai_api_key'] = data['openai_api_key'].strip()
+        # Gemini API 키 업데이트
+        if 'gemini_api_key' in data and data['gemini_api_key']:
+            keys['gemini_api_key'] = data['gemini_api_key'].strip()
         
         # YouTube API 키 업데이트
         if 'youtube_api_key' in data and data['youtube_api_key']:
@@ -103,28 +103,34 @@ def test_api_keys():
         
         results = {}
         
-        if api_type == 'openai' or api_type == 'all':
-            # OpenAI API 테스트
+        if api_type == 'gemini' or api_type == 'all':
+            # Gemini API 테스트
             try:
-                from openai import OpenAI
-                client = OpenAI()
+                import google.generativeai as genai
+                keys = load_api_keys()
+                api_key = keys.get('gemini_api_key') or os.getenv('GEMINI_API_KEY')
                 
-                # 간단한 테스트 요청
-                response = client.chat.completions.create(
-                    model="gemini-2.5-flash",
-                    messages=[{"role": "user", "content": "Hello"}],
-                    max_tokens=10
-                )
-                
-                results['openai'] = {
-                    'status': 'success',
-                    'message': 'OpenAI API 연결 성공',
-                    'model': 'gemini-2.5-flash'
-                }
+                if not api_key:
+                    results['gemini'] = {
+                        'status': 'error',
+                        'message': 'Gemini API 키가 설정되지 않았습니다'
+                    }
+                else:
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                    
+                    # 간단한 테스트 요청
+                    response = model.generate_content("Hello")
+                    
+                    results['gemini'] = {
+                        'status': 'success',
+                        'message': 'Gemini API 연결 성공',
+                        'model': 'gemini-2.0-flash-exp'
+                    }
             except Exception as e:
-                results['openai'] = {
+                results['gemini'] = {
                     'status': 'error',
-                    'message': f'OpenAI API 연결 실패: {str(e)}'
+                    'message': f'Gemini API 연결 실패: {str(e)}'
                 }
         
         if api_type == 'youtube' or api_type == 'all':
@@ -147,11 +153,11 @@ def delete_api_key():
         
         keys = load_api_keys()
         
-        if key_type == 'openai':
-            if 'openai_api_key' in keys:
-                del keys['openai_api_key']
-                if 'OPENAI_API_KEY' in os.environ:
-                    del os.environ['OPENAI_API_KEY']
+        if key_type == 'gemini':
+            if 'gemini_api_key' in keys:
+                del keys['gemini_api_key']
+                if 'GEMINI_API_KEY' in os.environ:
+                    del os.environ['GEMINI_API_KEY']
         elif key_type == 'youtube':
             if 'youtube_api_key' in keys:
                 del keys['youtube_api_key']
@@ -174,9 +180,9 @@ def get_system_status():
         keys = load_api_keys()
         
         status = {
-            'openai': {
-                'configured': bool(keys.get('openai_api_key') or os.getenv('OPENAI_API_KEY')),
-                'source': 'file' if keys.get('openai_api_key') else ('env' if os.getenv('OPENAI_API_KEY') else 'none')
+            'gemini': {
+                'configured': bool(keys.get('gemini_api_key') or os.getenv('GEMINI_API_KEY')),
+                'source': 'file' if keys.get('gemini_api_key') else ('env' if os.getenv('GEMINI_API_KEY') else 'none')
             },
             'youtube': {
                 'configured': bool(keys.get('youtube_api_key') or os.getenv('YOUTUBE_API_KEY')),
