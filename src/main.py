@@ -53,38 +53,26 @@ with app.app_context():
     # 관리자 계정 초기화
     init_admin_user()
 
-# 루트 경로
-@app.route('/')
-def index():
+# SPA를 위한 catch-all 라우트
+# 중요: 이 라우트는 블루프린트가 매칭되지 않은 경로만 처리합니다
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    """
+    정적 파일 또는 index.html 제공
+    블루프린트가 먼저 매칭되므로 API 경로는 여기 도달하지 않음
+    """
     static_folder_path = app.static_folder
     if static_folder_path is None:
         return "Static folder not configured", 404
-    
-    index_path = os.path.join(static_folder_path, 'index.html')
-    if os.path.exists(index_path):
-        return send_from_directory(static_folder_path, 'index.html')
-    else:
-        return "index.html not found", 404
 
-# 404 에러 핸들러 - React Router를 위한 SPA 폴백
-@app.errorhandler(404)
-def not_found(e):
-    # API 경로에 대한 404는 JSON으로 반환하고 끝
-    if request.path.startswith('/api/'):
-        from flask import jsonify
-        return jsonify({'error': 'Not found'}), 404
+    # 정적 파일이 실제로 존재하면 제공
+    if path != "":
+        file_path = os.path.join(static_folder_path, path)
+        if os.path.isfile(file_path):
+            return send_from_directory(static_folder_path, path)
     
-    # 그 외 경로는 정적 파일 또는 index.html 제공
-    static_folder_path = app.static_folder
-    if static_folder_path is None:
-        return "Static folder not configured", 404
-    
-    # 요청 경로에 해당하는 정적 파일이 있으면 제공
-    requested_path = request.path.lstrip('/')
-    if requested_path and os.path.exists(os.path.join(static_folder_path, requested_path)):
-        return send_from_directory(static_folder_path, requested_path)
-    
-    # 없으면 index.html 제공 (React Router가 처리)
+    # 그 외 모든 경로는 index.html 제공 (React Router가 처리)
     index_path = os.path.join(static_folder_path, 'index.html')
     if os.path.exists(index_path):
         return send_from_directory(static_folder_path, 'index.html')
@@ -93,5 +81,5 @@ def not_found(e):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
 
