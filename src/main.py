@@ -17,10 +17,14 @@ from src.routes.admin import admin_bp, init_api_keys
 from src.routes.analytics import analytics_bp
 from src.routes.trends import trends_bp
 from src.routes.beauty import beauty_bp
+from src.routes.admin_auth import admin_auth_bp, init_admin_user
+from src.middleware.visitor_tracker import track_visitor
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
-app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
-CORS(app)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'asdf#FGSgvasgf$5$WGT')
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+CORS(app, supports_credentials=True)
 
 app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(youtube_bp, url_prefix='/api/youtube')
@@ -29,9 +33,15 @@ app.register_blueprint(admin_bp, url_prefix='/api/admin')
 app.register_blueprint(analytics_bp, url_prefix='/api/analytics')
 app.register_blueprint(trends_bp, url_prefix='/api/trends')
 app.register_blueprint(beauty_bp, url_prefix='/api/beauty')
+app.register_blueprint(admin_auth_bp, url_prefix='/api/admin-auth')
 
 # 저장된 API 키 로드
 init_api_keys()
+
+# 방문자 추적 미들웨어
+@app.before_request
+def before_request():
+    track_visitor()
 
 # uncomment if you need to use database
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
@@ -39,6 +49,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 with app.app_context():
     db.create_all()
+    # 관리자 계정 초기화
+    init_admin_user()
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

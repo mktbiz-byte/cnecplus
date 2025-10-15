@@ -377,3 +377,169 @@ def optimize_title():
         print(f"Error in optimize_title: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+
+@ai_bp.route('/channel-score', methods=['POST'])
+def get_channel_score():
+    """채널 AI 평가 점수 시스템 (0-10점 척도)"""
+    
+    gemini_api_key = get_gemini_api_key()
+    youtube_api_key = get_youtube_api_key()
+    
+    if not gemini_api_key or not youtube_api_key:
+        return jsonify({'error': 'API keys not configured'}), 503
+    
+    try:
+        channel_data = request.json
+        
+        if not channel_data:
+            return jsonify({'error': 'No channel data provided'}), 400
+        
+        channel_id = channel_data.get('id')
+        if not channel_id:
+            return jsonify({'error': 'Channel ID not provided'}), 400
+        
+        # 실제 영상 데이터 가져오기
+        videos = get_channel_videos(channel_id, youtube_api_key, max_results=50)
+        
+        if not videos:
+            return jsonify({'error': 'Failed to fetch channel videos'}), 500
+        
+        # 기본 통계 계산
+        total_videos = len(videos)
+        avg_views = sum(v['views'] for v in videos) / total_videos if total_videos > 0 else 0
+        avg_likes = sum(v['likes'] for v in videos) / total_videos if total_videos > 0 else 0
+        avg_comments = sum(v['comments'] for v in videos) / total_videos if total_videos > 0 else 0
+        avg_engagement = sum((v['likes'] + v['comments']) / v['views'] * 100 if v['views'] > 0 else 0 for v in videos) / total_videos if total_videos > 0 else 0
+        
+        # 조회수 일관성 계산 (표준편차 기반)
+        import statistics
+        views_list = [v['views'] for v in videos]
+        views_std = statistics.stdev(views_list) if len(views_list) > 1 else 0
+        views_cv = (views_std / avg_views * 100) if avg_views > 0 else 0  # 변동계수
+        
+        # 인기 영상 비율
+        top_videos = sorted(videos, key=lambda x: x['views'], reverse=True)[:10]
+        top_avg_views = sum(v['views'] for v in top_videos) / len(top_videos) if top_videos else 0
+        
+        # Gemini에게 점수 평가 요청
+        prompt = f"""당신은 YouTube 채널 평가 전문가입니다. 다음 채널 데이터를 분석하여 5가지 항목에 대해 **0~10점** 척도로 정확한 점수를 매겨주세요.
+
+**채널 기본 정보:**
+- 채널명: {channel_data.get('title', 'N/A')}
+- 구독자 수: {channel_data.get('stats', {}).get('subscribers', 'N/A')}
+- 총 동영상 수: {channel_data.get('stats', {}).get('videos', 'N/A')}
+- 총 조회수: {channel_data.get('stats', {}).get('views', 'N/A')}
+
+**최근 50개 영상 분석 결과:**
+- 분석한 영상 수: {total_videos}개
+- 평균 조회수: {int(avg_views):,}
+- 평균 좋아요: {int(avg_likes):,}
+- 평균 댓글: {int(avg_comments):,}
+- 평균 참여율: {avg_engagement:.2f}%
+- 조회수 변동계수: {views_cv:.1f}% (낮을수록 일관성 높음)
+- Top 10 평균 조회수: {int(top_avg_views):,}
+
+**평가 기준:**
+
+1. **콘텐츠 품질 점수 (0-10점)**
+   - 평가 요소: 평균 조회수, 평균 참여율, 구독자 대비 조회수 비율
+   - 10점: 매우 우수한 품질 (참여율 5% 이상, 구독자 대비 높은 조회수)
+   - 7-9점: 우수한 품질
+   - 4-6점: 보통 품질
+   - 0-3점: 개선 필요
+
+2. **시청자 참여도 점수 (0-10점)**
+   - 평가 요소: 좋아요율, 댓글 수, 전체 참여율
+   - 10점: 매우 높은 참여도 (참여율 5% 이상)
+   - 7-9점: 높은 참여도 (참여율 3-5%)
+   - 4-6점: 보통 참여도 (참여율 1-3%)
+   - 0-3점: 낮은 참여도 (참여율 1% 미만)
+
+3. **업로드 일관성 점수 (0-10점)**
+   - 평가 요소: 조회수 변동계수, 영상 간 성과 일관성
+   - 10점: 매우 일관적 (변동계수 30% 미만)
+   - 7-9점: 일관적 (변동계수 30-60%)
+   - 4-6점: 보통 (변동계수 60-100%)
+   - 0-3점: 불일치함 (변동계수 100% 이상)
+
+4. **성장 잠재력 점수 (0-10점)**
+   - 평가 요소: 최근 영상 트렌드, Top 10 영상 성과, 구독자 증가 가능성
+   - 10점: 매우 높은 성장 잠재력
+   - 7-9점: 높은 성장 잠재력
+   - 4-6점: 보통 성장 잠재력
+   - 0-3점: 낮은 성장 잠재력
+
+5. **제목 최적화 점수 (0-10점)**
+   - 평가 요소: 최근 10개 영상 제목의 품질, 키워드 사용, 클릭 유도성
+   - 10점: 매우 우수한 제목 (키워드, 호기심, 명확성 모두 우수)
+   - 7-9점: 우수한 제목
+   - 4-6점: 보통 제목
+   - 0-3점: 개선 필요한 제목
+
+**최근 10개 영상 제목:**
+{chr(10).join([f"{i+1}. {v['title']}" for i, v in enumerate(videos[:10])])}
+
+**출력 형식 (반드시 이 형식을 정확히 따라주세요):**
+```json
+{{
+  "content_quality": {{
+    "score": [0-10 사이의 정수],
+    "reason": "[점수 이유를 1-2문장으로]"
+  }},
+  "viewer_engagement": {{
+    "score": [0-10 사이의 정수],
+    "reason": "[점수 이유를 1-2문장으로]"
+  }},
+  "upload_consistency": {{
+    "score": [0-10 사이의 정수],
+    "reason": "[점수 이유를 1-2문장으로]"
+  }},
+  "growth_potential": {{
+    "score": [0-10 사이의 정수],
+    "reason": "[점수 이유를 1-2문장으로]"
+  }},
+  "title_optimization": {{
+    "score": [0-10 사이의 정수],
+    "reason": "[점수 이유를 1-2문장으로]"
+  }},
+  "overall_summary": "[전체 평가 요약을 2-3문장으로]"
+}}
+```
+
+**중요:** 반드시 위의 JSON 형식으로만 응답하고, 다른 텍스트는 포함하지 마세요."""
+
+        # Gemini API 호출
+        result = call_gemini_api(prompt, gemini_api_key)
+        
+        if result:
+            # JSON 추출 (```json ... ``` 형식 처리)
+            import re
+            json_match = re.search(r'```json\s*(\{.*?\})\s*```', result, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                # JSON 블록이 없으면 전체를 JSON으로 파싱 시도
+                json_str = result.strip()
+            
+            try:
+                scores = json.loads(json_str)
+                return jsonify(scores)
+            except json.JSONDecodeError:
+                # JSON 파싱 실패 시 기본 점수 반환
+                return jsonify({
+                    'content_quality': {'score': 5, 'reason': 'AI 분석 중 오류 발생'},
+                    'viewer_engagement': {'score': 5, 'reason': 'AI 분석 중 오류 발생'},
+                    'upload_consistency': {'score': 5, 'reason': 'AI 분석 중 오류 발생'},
+                    'growth_potential': {'score': 5, 'reason': 'AI 분석 중 오류 발생'},
+                    'title_optimization': {'score': 5, 'reason': 'AI 분석 중 오류 발생'},
+                    'overall_summary': 'AI 분석 중 오류가 발생했습니다. 나중에 다시 시도해주세요.',
+                    'raw_response': result
+                })
+        else:
+            return jsonify({'error': 'Failed to generate scores'}), 500
+    
+    except Exception as e:
+        print(f"Error in get_channel_score: {e}")
+        return jsonify({'error': str(e)}), 500
+
