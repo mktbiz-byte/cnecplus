@@ -57,6 +57,11 @@ with app.app_context():
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
+    # API 경로는 블루프린트가 처리하도록 함
+    if path.startswith('api/'):
+        from flask import abort
+        abort(404)
+    
     static_folder_path = app.static_folder
     if static_folder_path is None:
             return "Static folder not configured", 404
