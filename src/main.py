@@ -60,8 +60,17 @@ init_api_keys()
 def before_request():
     track_visitor()
 
-# uncomment if you need to use database
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
+# 데이터베이스 설정 (Render.com Persistent Disk 지원)
+if os.path.exists('/data'):
+    # Render.com Persistent Disk 사용
+    db_path = '/data/app.db'
+    print(f"✅ Using persistent database at {db_path}")
+else:
+    # 로컬 개발 환경
+    db_path = os.path.join(os.path.dirname(__file__), 'database', 'app.db')
+    print(f"ℹ️ Using local database at {db_path}")
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 with app.app_context():
