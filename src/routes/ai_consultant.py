@@ -332,20 +332,29 @@ def analyze_channel():
         # 실제 영상 데이터 가져오기
         videos = get_channel_videos(channel_id, youtube_api_key, max_results=30)
         
-        if not videos:
-            return jsonify({'error': 'Failed to fetch channel videos'}), 500
-        
-        # 영상 데이터 분석
-        videos_sorted = sorted(videos, key=lambda x: x['views'], reverse=True)
-        top_5_videos = videos_sorted[:5]
-        bottom_5_videos = videos_sorted[-5:]
-        
-        avg_views = sum(v['views'] for v in videos) / len(videos)
-        avg_likes = sum(v['likes'] for v in videos) / len(videos)
-        avg_engagement = sum((v['likes'] + v['comments']) / v['views'] * 100 if v['views'] > 0 else 0 for v in videos) / len(videos)
+        # 영상 데이터가 있으면 분석, 없으면 기본 분석
+        if videos and len(videos) > 0:
+            # 영상 데이터 분석
+            videos_sorted = sorted(videos, key=lambda x: x['views'], reverse=True)
+            top_5_videos = videos_sorted[:5]
+            bottom_5_videos = videos_sorted[-5:]
+            
+            avg_views = sum(v['views'] for v in videos) / len(videos)
+            avg_likes = sum(v['likes'] for v in videos) / len(videos)
+            avg_engagement = sum((v['likes'] + v['comments']) / v['views'] * 100 if v['views'] > 0 else 0 for v in videos) / len(videos)
+        else:
+            # 영상 데이터를 가져오지 못한 경우 기본값 설정
+            videos = []
+            top_5_videos = []
+            bottom_5_videos = []
+            avg_views = 0
+            avg_likes = 0
+            avg_engagement = 0
         
         # Gemini에게 전달할 프롬프트 생성
-        prompt = f"""당신은 YouTube 크리에이터 성장 전문 컨설턴트입니다. 다음 채널의 **실제 영상 데이터**를 분석하고 한국 시장에 맞는 **구체적이고 실용적인** 성장 전략을 제안해주세요.
+        if videos and len(videos) > 0:
+            # 영상 데이터가 있는 경우
+            prompt = f"""당신은 YouTube 크리에이터 성장 전문 컨설턴트입니다. 다음 채널의 **실제 영상 데이터**를 분석하고 한국 시장에 맞는 **구체적이고 실용적인** 성장 전략을 제안해주세요.
 
 **채널 기본 정보:**
 - 채널명: {channel_data.get('title', 'N/A')}
@@ -363,7 +372,27 @@ def analyze_channel():
 {chr(10).join([f"{i+1}. {v['title']} - 조회수: {v['views']:,}, 좋아요: {v['likes']:,}" for i, v in enumerate(top_5_videos)])}
 
 **저조한 영상 Bottom 5:**
-{chr(10).join([f"{i+1}. {v['title']} - 조회수: {v['views']:,}, 좋아요: {v['likes']:,}" for i, v in enumerate(bottom_5_videos)])}
+{chr(10).join([f"{i+1}. {v['title']} - 조회수: {v['views']:,}, 좋아요: {v['likes']:,}" for i, v in enumerate(bottom_5_videos)])}"""
+        else:
+            # 영상 데이터가 없는 경우 기본 분석
+            prompt = f"""당신은 YouTube 크리에이터 성장 전문 컨설턴트입니다. 다음 채널의 기본 정보를 분석하고 한국 시장에 맞는 **구체적이고 실용적인** 성장 전략을 제안해주세요.
+
+**채널 기본 정보:**
+- 채널명: {channel_data.get('title', 'N/A')}
+- 구독자 수: {channel_data.get('stats', {}).get('subscribers', 'N/A')}
+- 총 동영상 수: {channel_data.get('stats', {}).get('videos', 'N/A')}
+- 총 조회수: {channel_data.get('stats', {}).get('views', 'N/A')}
+- 채널 설명: {channel_data.get('description', 'N/A')}
+
+**분석 요청:**
+1. 채널의 특징과 강점 분석
+2. 구독자 수와 조회수를 고려한 성장 전략
+3. 콘텐츠 방향성 제안
+4. 단기 액션 아이템 (1개월)
+5. 중기 목표 (3개월)"""
+        
+        # 공통 프롬프트 부분
+        prompt += f"""
 
 **분석 요청:**
 1. **인기 영상 패턴 분석**: Top 5 영상의 제목에서 공통 키워드, 주제, 패턴을 찾아주세요.
