@@ -696,3 +696,128 @@ JSON 형식으로만 응답해주세요.
         print(f"Error in get_similar_video_recommendations: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+
+@youtube_bp.route('/insights/<channel_id>', methods=['GET'])
+def get_channel_insights(channel_id):
+    """채널 성장 인사이트 및 트렌드 키워드 제공"""
+    from src.utils.api_key_manager import get_gemini_api_key
+    from src.routes.ai_consultant import call_gemini_api
+    
+    api_key = get_youtube_api_key()
+    gemini_key = get_gemini_api_key()
+    
+    if not api_key or not gemini_key:
+        return jsonify({'error': 'API keys not configured'}), 503
+    
+    try:
+        # 1. 채널 정보 가져오기
+        resolved_id = resolve_channel_id(channel_id, api_key)
+        if not resolved_id:
+            return jsonify({'error': 'Channel not found'}), 404
+        
+        channel_id = resolved_id
+        
+        # 채널 정보 조회
+        channel_url = 'https://www.googleapis.com/youtube/v3/channels'
+        channel_params = {
+            'part': 'snippet,statistics',
+            'id': channel_id,
+            'key': api_key
+        }
+        channel_response = requests.get(channel_url, params=channel_params)
+        
+        if channel_response.status_code != 200:
+            return jsonify({'error': 'Failed to fetch channel info'}), channel_response.status_code
+        
+        channel_data = channel_response.json()
+        channel_item = channel_data['items'][0]
+        
+        channel_title = channel_item['snippet']['title']
+        channel_description = channel_item['snippet']['description']
+        subscriber_count = int(channel_item['statistics'].get('subscriberCount', 0))
+        video_count = int(channel_item['statistics'].get('videoCount', 0))
+        view_count = int(channel_item['statistics'].get('viewCount', 0))
+        
+        # 2. 최근 영상 제목 가져오기
+        search_url = 'https://www.googleapis.com/youtube/v3/search'
+        search_params = {
+            'part': 'snippet',
+            'channelId': channel_id,
+            'order': 'date',
+            'type': 'video',
+            'maxResults': 5,
+            'key': api_key
+        }
+        search_response = requests.get(search_url, params=search_params)
+        
+        recent_titles = []
+        if search_response.status_code == 200:
+            search_data = search_response.json()
+            recent_titles = [item['snippet']['title'] for item in search_data.get('items', [])]
+        
+        # 3. Gemini AI로 인사이트 및 트렌드 분석
+        prompt = f"""
+당신은 YouTube 채널 성장 전문가이자 트렌드 분석가입니다.
+
+**채널 정보:**
+- 채널명: {channel_title}
+- 설명: {channel_description[:200]}
+- 구독자: {subscriber_count:,}명
+- 영상 수: {video_count}개
+- 총 조회수: {view_count:,}
+- 최근 영상 제목:
+{chr(10).join(f"  - {title}" for title in recent_titles[:3])}
+
+**요청사항:**
+1. 채널 성장 인사이트 (간단명료하게)
+   - 강점 1가지
+   - 개선점 1가지
+   - 즉시 실행 가능한 액션 아이템 1가지
+
+2. 이 채널 주제와 관련된 실시간 트렌드 키워드 5개
+   - 네이버 트렌드, 구글 트렌드, 최근 이슈를 고려
+   - 한국 시장 중심
+   - 채널이 활용할 수 있는 키워드
+
+응답 형식 (JSON):
+{{
+  "insights": {{
+    "strength": "강점 설명 (1문장)",
+    "improvement": "개선점 설명 (1문장)",
+    "action": "액션 아이템 (1문장)"
+  }},
+  "trending_keywords": [
+    {{"keyword": "키워드1", "reason": "이유 (1문장)"}},
+    {{"keyword": "키워드2", "reason": "이유 (1문장)"}},
+    {{"keyword": "키워드3", "reason": "이유 (1문장)"}},
+    {{"keyword": "키워드4", "reason": "이유 (1문장)"}},
+    {{"keyword": "키워드5", "reason": "이유 (1문장)"}}
+  ]
+}}
+
+JSON 형식으로만 응답해주세요.
+"""
+        
+        ai_response = call_gemini_api(prompt)
+        
+        if not ai_response:
+            return jsonify({'error': 'Failed to generate insights'}), 500
+        
+        # JSON 파싱
+        import json
+        import re
+        json_match = re.search(r'```json\s*(.*?)\s*```', ai_response, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            json_str = ai_response
+        
+        result = json.loads(json_str)
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        print(f"Error in get_channel_insights: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
