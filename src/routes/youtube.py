@@ -515,3 +515,184 @@ def get_trends():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+
+@youtube_bp.route('/recommendations/similar-videos/<channel_id>', methods=['GET'])
+def get_similar_video_recommendations(channel_id):
+    """비슷한 스타일의 높은 조회수 영상 추천"""
+    from src.utils.api_key_manager import get_gemini_api_key
+    
+    api_key = get_youtube_api_key()
+    gemini_key = get_gemini_api_key()
+    
+    if not api_key:
+        return jsonify({'error': 'YouTube API key not configured'}), 503
+    
+    if not gemini_key:
+        return jsonify({'error': 'Gemini API key not configured'}), 503
+    
+    try:
+        # 1. 채널 정보 가져오기
+        resolved_id = resolve_channel_id(channel_id, api_key)
+        if not resolved_id:
+            return jsonify({'error': 'Channel not found'}), 404
+        
+        channel_id = resolved_id
+        
+        # 채널 정보 조회
+        channel_url = 'https://www.googleapis.com/youtube/v3/channels'
+        channel_params = {
+            'part': 'snippet',
+            'id': channel_id,
+            'key': api_key
+        }
+        channel_response = requests.get(channel_url, params=channel_params)
+        
+        if channel_response.status_code != 200:
+            return jsonify({'error': 'Failed to fetch channel info'}), channel_response.status_code
+        
+        channel_data = channel_response.json()
+        channel_title = channel_data['items'][0]['snippet']['title']
+        channel_description = channel_data['items'][0]['snippet']['description']
+        
+        # 2. 채널의 최근 영상 가져오기 (분석용)
+        search_url = 'https://www.googleapis.com/youtube/v3/search'
+        search_params = {
+            'part': 'snippet',
+            'channelId': channel_id,
+            'order': 'date',
+            'type': 'video',
+            'maxResults': 10,
+            'key': api_key
+        }
+        search_response = requests.get(search_url, params=search_params)
+        
+        if search_response.status_code != 200:
+            return jsonify({'error': 'Failed to fetch channel videos'}), search_response.status_code
+        
+        search_data = search_response.json()
+        recent_titles = [item['snippet']['title'] for item in search_data.get('items', [])]
+        
+        # 3. Gemini AI로 채널 스타일 분석 및 검색 키워드 생성
+        from src.routes.ai_consultant import call_gemini_api
+        
+        analysis_prompt = f"""
+당신은 YouTube 콘텐츠 분석 전문가입니다. 다음 채널을 분석하여 비슷한 스타일의 영상을 찾기 위한 검색 키워드 3개를 제안해주세요.
+
+채널명: {channel_title}
+채널 설명: {channel_description}
+최근 영상 제목:
+{chr(10).join(f"- {title}" for title in recent_titles[:5])}
+
+이 채널의 주요 주제, 스타일, 타겟 시청자를 분석하고, YouTube에서 검색할 때 사용할 한국어 키워드 3개를 제안해주세요.
+키워드는 이 채널과 비슷한 스타일의 높은 조회수 영상을 찾는 데 최적화되어야 합니다.
+
+응답 형식 (JSON):
+{{
+  "keywords": ["키워드1", "키워드2", "키워드3"],
+  "style_summary": "채널 스타일 요약 (1-2문장)"
+}}
+
+JSON 형식으로만 응답해주세요.
+"""
+        
+        ai_response = call_gemini_api(analysis_prompt)
+        
+        if not ai_response:
+            return jsonify({'error': 'Failed to analyze channel style'}), 500
+        
+        # JSON 파싱
+        import json
+        import re
+        json_match = re.search(r'```json\s*(.*?)\s*```', ai_response, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            json_str = ai_response
+        
+        analysis = json.loads(json_str)
+        keywords = analysis.get('keywords', [])
+        style_summary = analysis.get('style_summary', '')
+        
+        # 4. 각 키워드로 높은 조회수 영상 검색
+        recommendations = []
+        
+        for keyword in keywords[:2]:  # 상위 2개 키워드만 사용
+            search_params = {
+                'part': 'snippet',
+                'q': keyword,
+                'type': 'video',
+                'order': 'viewCount',
+                'maxResults': 5,
+                'regionCode': 'KR',
+                'relevanceLanguage': 'ko',
+                'key': api_key
+            }
+            
+            keyword_response = requests.get(search_url, params=search_params)
+            
+            if keyword_response.status_code == 200:
+                keyword_data = keyword_response.json()
+                video_ids = [item['id']['videoId'] for item in keyword_data.get('items', [])]
+                
+                # 비디오 통계 정보 가져오기
+                if video_ids:
+                    stats_url = 'https://www.googleapis.com/youtube/v3/videos'
+                    stats_params = {
+                        'part': 'snippet,statistics',
+                        'id': ','.join(video_ids),
+                        'key': api_key
+                    }
+                    stats_response = requests.get(stats_url, params=stats_params)
+                    
+                    if stats_response.status_code == 200:
+                        stats_data = stats_response.json()
+                        
+                        for video in stats_data.get('items', []):
+                            view_count = int(video['statistics'].get('viewCount', 0))
+                            like_count = int(video['statistics'].get('likeCount', 0))
+                            comment_count = int(video['statistics'].get('commentCount', 0))
+                            
+                            # 조회수 100만 이상만 추천
+                            if view_count >= 1000000:
+                                # 텍스트 형식 변환
+                                def format_count(count):
+                                    if count >= 1000000:
+                                        return f"{count/1000000:.1f}M"
+                                    elif count >= 1000:
+                                        return f"{count/1000:.1f}K"
+                                    return str(count)
+                                
+                                recommendations.append({
+                                    'id': video['id'],
+                                    'title': video['snippet']['title'],
+                                    'channelTitle': video['snippet']['channelTitle'],
+                                    'thumbnail': video['snippet']['thumbnails']['high']['url'],
+                                    'thumbnails': [{'url': video['snippet']['thumbnails']['high']['url']}],
+                                    'viewCount': view_count,
+                                    'likeCount': like_count,
+                                    'commentCount': comment_count,
+                                    'viewCountText': f"{format_count(view_count)} 조회",
+                                    'likeCountText': format_count(like_count),
+                                    'commentCountText': format_count(comment_count),
+                                    'keyword': keyword
+                                })
+        
+        # 조회수 기준 정렬 및 중복 제거
+        seen_ids = set()
+        unique_recommendations = []
+        for video in sorted(recommendations, key=lambda x: x['viewCount'], reverse=True):
+            if video['id'] not in seen_ids:
+                seen_ids.add(video['id'])
+                unique_recommendations.append(video)
+        
+        return jsonify({
+            'recommendations': unique_recommendations[:10],  # 상위 10개만
+            'style_summary': style_summary,
+            'keywords': keywords
+        })
+    
+    except Exception as e:
+        print(f"Error in get_similar_video_recommendations: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
