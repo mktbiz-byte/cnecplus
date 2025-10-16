@@ -117,29 +117,110 @@ def get_channel_info(channel_input):
 
 def scrape_channel_about_page(channel_id):
     """
-    채널 정보 페이지에서 이메일 스크래핑 (YouTube 공개 정보만)
+    채널 정보 페이지에서 이메일 스크래핑 (개선된 버전)
     """
     try:
         # YouTube 채널 정보 페이지 URL
         url = f'https://www.youtube.com/channel/{channel_id}/about'
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
         }
         
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=15)
         
         if response.status_code != 200:
+            print(f"Failed to fetch channel page: HTTP {response.status_code}")
             return None
         
-        # 페이지에서 이메일 찾기
-        email = extract_email_from_text(response.text)
+        html_content = response.text
         
-        return email
+        # 1. 일반 이메일 패턴 찾기
+        email = extract_email_from_text(html_content)
+        if email:
+            print(f"Found email in HTML: {email}")
+            return email
+        
+        # 2. BeautifulSoup으로 더 정교하게 파싱
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # 채널 설명 텍스트 찾기
+        description_elements = soup.find_all(['div', 'span', 'p'], class_=lambda x: x and ('description' in x.lower() or 'about' in x.lower()))
+        for elem in description_elements:
+            text = elem.get_text()
+            email = extract_email_from_text(text)
+            if email:
+                print(f"Found email in description element: {email}")
+                return email
+        
+        # 3. JSON-LD 데이터에서 찾기
+        scripts = soup.find_all('script', type='application/ld+json')
+        for script in scripts:
+            try:
+                import json
+                data = json.loads(script.string)
+                if isinstance(data, dict):
+                    # 재귀적으로 이메일 찾기
+                    email = find_email_in_dict(data)
+                    if email:
+                        print(f"Found email in JSON-LD: {email}")
+                        return email
+            except:
+                continue
+        
+        # 4. ytInitialData에서 찾기 (YouTube의 내부 데이터)
+        yt_data_match = re.search(r'var ytInitialData = ({.*?});', html_content)
+        if yt_data_match:
+            try:
+                import json
+                yt_data = json.loads(yt_data_match.group(1))
+                email = find_email_in_dict(yt_data)
+                if email:
+                    print(f"Found email in ytInitialData: {email}")
+                    return email
+            except:
+                pass
+        
+        print("No email found in channel page")
+        return None
         
     except Exception as e:
         print(f"Error scraping channel page: {e}")
         return None
+
+def find_email_in_dict(data, depth=0, max_depth=10):
+    """
+    중첩된 dictionary에서 재귀적으로 이메일 찾기
+    """
+    if depth > max_depth:
+        return None
+    
+    if isinstance(data, dict):
+        for key, value in data.items():
+            # 키 이름에 'email'이 포함되어 있으면 확인
+            if 'email' in key.lower() and isinstance(value, str):
+                email = extract_email_from_text(value)
+                if email:
+                    return email
+            # 값이 문자열이면 이메일 패턴 찾기
+            if isinstance(value, str):
+                email = extract_email_from_text(value)
+                if email:
+                    return email
+            # 재귀 탐색
+            elif isinstance(value, (dict, list)):
+                email = find_email_in_dict(value, depth + 1, max_depth)
+                if email:
+                    return email
+    elif isinstance(data, list):
+        for item in data:
+            email = find_email_in_dict(item, depth + 1, max_depth)
+            if email:
+                return email
+    
+    return None
 
 
 @creator_contact_bp.route('/search', methods=['POST'])
