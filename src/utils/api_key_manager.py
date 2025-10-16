@@ -30,7 +30,9 @@ class ApiKeyManager:
 
     def _load_keys(self):
         """설정 파일과 환경 변수에서 API 키 로드"""
-        print("🔄 Loading API keys...")
+        print("\n" + "="*60)
+        print("🔄 Loading API keys from environment variables...")
+        print("="*60)
         # 설정 파일 경로
         config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json')
         
@@ -91,10 +93,11 @@ class ApiKeyManager:
         self.gemini_keys = unique_gemini
 
         if self.gemini_keys:
-            print(f"✅ Loaded {len(self.gemini_keys)} unique Gemini API keys.")
+            print(f"\n✅ Gemini API: Loaded {len(self.gemini_keys)} key(s)")
+            print(f"   - Using FIRST key only (paid plan): ...{self.gemini_keys[0][-8:]}")
             self.gemini_key_iterator = cycle(self.gemini_keys)
         else:
-            print("⚠️ No Gemini API keys loaded.")
+            print("\n⚠️ Gemini API: No keys loaded!")
 
         # YouTube 키 중복 제거 (순서 유지)
         seen = set()
@@ -106,21 +109,21 @@ class ApiKeyManager:
         self.youtube_keys = unique_youtube
 
         if self.youtube_keys:
-            print(f"✅ Loaded {len(self.youtube_keys)} unique YouTube API keys.")
+            print(f"\n✅ YouTube API: Loaded {len(self.youtube_keys)} key(s)")
+            for i, key in enumerate(self.youtube_keys):
+                print(f"   [{i+1}] ...{key[-8:]}")
             self.youtube_key_iterator = cycle(self.youtube_keys)
         else:
-            print("⚠️ No YouTube API keys loaded.")
+            print("\n⚠️ YouTube API: No keys loaded!")
+        print("="*60 + "\n")
 
     def get_next_gemini_key(self):
-        """다음 Gemini API 키를 순환하며 반환"""
-        if not self.gemini_key_iterator:
+        """Gemini API 키 반환 (유료 플랜이므로 첫 번째 키만 사용)"""
+        if not self.gemini_keys:
             return None
-        try:
-            key = next(self.gemini_key_iterator)
-            print(f"🔑 Using Gemini API key ending with: ...{key[-4:]}")
-            return key
-        except StopIteration:
-            return None
+        # 유료 플랜이므로 항상 첫 번째 키만 사용
+        key = self.gemini_keys[0]
+        return key
 
     def get_gemini_key(self):
         """Gemini API 키 반환 (호환성을 위해 유지)"""
