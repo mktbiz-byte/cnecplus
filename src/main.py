@@ -25,6 +25,7 @@ from src.routes.special_user_auth import special_user_bp
 from src.routes.special_auth import special_auth_bp
 from src.routes.creator_contact import creator_contact_bp
 from src.routes.search_history_routes import search_history_bp
+from src.routes.shorts_planner import shorts_planner_bp
 from src.middleware.visitor_tracker import track_visitor
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
@@ -49,6 +50,7 @@ app.register_blueprint(special_user_bp)  # /api/special-user
 app.register_blueprint(special_auth_bp, url_prefix='/api/special-auth')
 app.register_blueprint(creator_contact_bp, url_prefix='/api/creator-contact')
 app.register_blueprint(search_history_bp)  # /api/search-history
+app.register_blueprint(shorts_planner_bp)  # /api/shorts-planner
 
 # 저장된 API 키 로드
 init_api_keys()

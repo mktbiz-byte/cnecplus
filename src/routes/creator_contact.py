@@ -6,29 +6,12 @@ from flask import Blueprint, jsonify, request
 import requests
 import re
 import os
-import json
 from bs4 import BeautifulSoup
+from src.utils.api_key_manager import make_youtube_api_request
 
 creator_contact_bp = Blueprint('creator_contact', __name__)
 
-def get_youtube_api_key():
-    """YouTube API 키 가져오기"""
-    # 환경 변수에서 먼저 확인
-    api_key = os.getenv('YOUTUBE_API_KEY')
-    if api_key:
-        return api_key
-    
-    # config 파일에서 확인
-    config_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'api_keys.json')
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, 'r') as f:
-                keys = json.load(f)
-                return keys.get('youtube_api_key')
-        except:
-            pass
-    
-    return None
+
 
 
 def extract_email_from_text(text):
@@ -50,54 +33,66 @@ def extract_email_from_text(text):
     return None
 
 
-def get_channel_info(channel_input, api_key):
+def get_channel_info(channel_input):
     """
-    채널 정보 가져오기
+    채널 정보 가져오기 (API 키 로테이션 적용)
     channel_input: 채널 ID, 핸들(@), 채널명, 또는 URL
     """
     try:
+        channel_id_to_fetch = None
+
         # URL에서 채널 ID 또는 핸들 추출
         if 'youtube.com' in channel_input:
             if '/channel/' in channel_input:
-                channel_id = channel_input.split('/channel/')[1].split('/')[0].split('?')[0]
+                channel_id_to_fetch = channel_input.split('/channel/')[1].split('/')[0].split('?')[0]
             elif '/@' in channel_input:
                 handle = channel_input.split('/@')[1].split('/')[0].split('?')[0]
                 channel_input = '@' + handle
-            else:
-                return None
         
         # 채널 ID로 직접 조회 (UC로 시작하는 24자리)
         if channel_input.startswith('UC') and len(channel_input) == 24:
+            channel_id_to_fetch = channel_input
+
+        if channel_id_to_fetch:
             url = 'https://www.googleapis.com/youtube/v3/channels'
             params = {
                 'part': 'snippet,statistics,brandingSettings',
-                'id': channel_input,
-                'key': api_key
+                'id': channel_id_to_fetch
             }
-            
-            response = requests.get(url, params=params, timeout=10)
-            data = response.json()
-            
-            if 'items' in data and len(data['items']) > 0:
-                return data['items'][0]
-        
+            data, error = make_youtube_api_request(url, params)
+            if data and 'items' in data and len(data['items']) > 0:
+                return data['items'][0], None
+            return None, error or "Channel not found with the given ID."
+
         # 핸들(@) 또는 채널명으로 검색
         search_url = 'https://www.googleapis.com/youtube/v3/search'
         search_params = {
             'part': 'snippet',
             'q': channel_input,
             'type': 'channel',
-            'maxResults': 1,
-            'key': api_key
+            'maxResults': 1
         }
         
-        search_response = requests.get(search_url, params=search_params, timeout=10)
-        search_data = search_response.json()
+        search_data, error = make_youtube_api_request(search_url, search_params)
         
-        if 'items' not in search_data or len(search_data['items']) == 0:
-            return None
+        if error:
+            return None, error
+
+        if not search_data or 'items' not in search_data or len(search_data['items']) == 0:
+            return None, "Channel not found by search."
         
-        channel_id = search_data['items'][0]['snippet']['channelId']
+        channel_id = search_data["items"][0]["snippet"]["channelId"]
+        
+        # 채널 상세 정보 가져오기
+        url = 'https://www.googleapis.com/youtube/v3/channels'
+        params = {
+            'part': 'snippet,statistics,brandingSettings',
+            'id': channel_id
+        }
+        data, error = make_youtube_api_request(url, params)
+        if data and 'items' in data and len(data['items']) > 0:
+            return data['items'][0], None
+        return None, error or "Channel details not found after search."
         
         # 채널 상세 정보 가져오기
         url = 'https://www.googleapis.com/youtube/v3/channels'
@@ -159,14 +154,12 @@ def search_creator_contact():
         if not channel_input:
             return jsonify({'error': '채널 정보를 입력해주세요.'}), 400
         
-        # YouTube API 키 확인
-        api_key = get_youtube_api_key()
-        if not api_key:
-            return jsonify({'error': 'YouTube API 키가 설정되지 않았습니다.'}), 503
-        
         # 채널 정보 가져오기
-        channel_info = get_channel_info(channel_input, api_key)
+        channel_info, error = get_channel_info(channel_input)
         
+        if error:
+            return jsonify({'error': '채널 정보 조회에 실패했습니다.', 'details': error}), 500
+
         if not channel_info:
             return jsonify({'error': '채널을 찾을 수 없습니다.'}), 404
         

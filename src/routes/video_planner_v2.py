@@ -6,10 +6,9 @@
 """
 
 from flask import Blueprint, request, jsonify, session
-import requests
-import json
 import os
 import sys
+from src.utils.api_key_manager import get_gemini_api_key, make_youtube_api_request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -33,51 +32,28 @@ def special_user_required(f):
 # API 키 관리
 # ============================================================
 
-def get_api_keys():
-    """API 키 로드"""
-    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'api_keys.json')
-    
-    keys = {
-        'gemini': None,
-        'youtube': None
-    }
-    
-    # config 파일에서 로드
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, 'r') as f:
-                config = json.load(f)
-                keys['gemini'] = config.get('gemini_api_key')
-                keys['youtube'] = config.get('youtube_api_key')
-        except:
-            pass
-    
-    # 환경변수에서 로드 (우선순위)
-    keys['gemini'] = os.getenv('GEMINI_API_KEY', keys['gemini'])
-    keys['youtube'] = os.getenv('YOUTUBE_API_KEY', keys['youtube'])
-    
-    return keys
+
 
 # ============================================================
 # YouTube 채널 분석
 # ============================================================
 
-def analyze_channel(channel_id, youtube_api_key):
-    """채널 스타일 분석"""
+def analyze_channel(channel_id):
+    """채널 스타일 분석 (API 키 로테이션 적용)"""
     try:
         # 채널 정보
         channel_url = 'https://www.googleapis.com/youtube/v3/channels'
         channel_params = {
             'part': 'snippet,statistics,contentDetails',
-            'id': channel_id,
-            'key': youtube_api_key
+            'id': channel_id
         }
-        
-        channel_response = requests.get(channel_url, params=channel_params, timeout=10)
-        channel_data = channel_response.json()
-        
-        if 'items' not in channel_data or len(channel_data['items']) == 0:
-            return None
+        channel_data, error = make_youtube_api_request(channel_url, channel_params)
+        if error:
+            print(f"Channel info error: {error}")
+            return None, error
+
+        if not channel_data or 'items' not in channel_data or len(channel_data['items']) == 0:
+            return None, "Channel not found."
         
         channel_info = channel_data['items'][0]
         
@@ -88,13 +64,20 @@ def analyze_channel(channel_id, youtube_api_key):
         videos_params = {
             'part': 'snippet',
             'playlistId': uploads_playlist_id,
-            'maxResults': 20,
-            'key': youtube_api_key
+            'maxResults': 20
         }
-        
-        videos_response = requests.get(videos_url, params=videos_params, timeout=10)
-        videos_data = videos_response.json()
-        
+        videos_data, error = make_youtube_api_request(videos_url, videos_params)
+        if error:
+            print(f"Playlist items error: {error}")
+            # 채널 정보만이라도 반환
+            return {
+                'channel_name': channel_info['snippet']['title'],
+                'description': channel_info['snippet']['description'],
+                'subscriber_count': int(channel_info['statistics'].get('subscriberCount', 0)),
+                'video_count': int(channel_info['statistics'].get('videoCount', 0)),
+                'videos': []
+            }, None
+
         video_ids = [item['snippet']['resourceId']['videoId'] for item in videos_data.get('items', [])]
         
         # 영상 상세 정보
@@ -103,12 +86,11 @@ def analyze_channel(channel_id, youtube_api_key):
             details_url = 'https://www.googleapis.com/youtube/v3/videos'
             details_params = {
                 'part': 'statistics,snippet',
-                'id': ','.join(video_ids),
-                'key': youtube_api_key
+                'id': ','.join(video_ids)
             }
-            
-            details_response = requests.get(details_url, params=details_params, timeout=10)
-            details_data = details_response.json()
+            details_data, error = make_youtube_api_request(details_url, details_params)
+            if error:
+                print(f"Video details error: {error}")
             
             for item in details_data.get('items', []):
                 videos.append({
@@ -134,20 +116,20 @@ def analyze_channel(channel_id, youtube_api_key):
 # 트렌드 분석
 # ============================================================
 
-def get_trending_topics(youtube_api_key):
-    """현재 트렌딩 주제 분석"""
+def get_trending_topics():
+    """현재 트렌딩 주제 분석 (API 키 로테이션 적용)"""
     try:
         url = 'https://www.googleapis.com/youtube/v3/videos'
         params = {
             'part': 'snippet',
             'chart': 'mostPopular',
             'regionCode': 'KR',
-            'maxResults': 10,
-            'key': youtube_api_key
+            'maxResults': 10
         }
-        
-        response = requests.get(url, params=params, timeout=10)
-        data = response.json()
+        data, error = make_youtube_api_request(url, params)
+        if error:
+            print(f"Trending topics error: {error}")
+            return []
         
         topics = []
         for item in data.get('items', []):
@@ -214,28 +196,32 @@ def generate_plan():
             return jsonify({'error': '채널 URL과 주제를 입력해주세요'}), 400
         
         # API 키 로드
-        keys = get_api_keys()
-        if not keys['gemini'] or not keys['youtube']:
-            return jsonify({'error': 'API 키가 설정되지 않았습니다'}), 503
+        gemini_key = get_gemini_api_key()
+        if not gemini_key:
+            return jsonify({'error': 'Gemini API 키가 설정되지 않았습니다'}), 503
         
         # 채널 ID 추출
-        channel_id = extract_channel_id(channel_url)
+        channel_id, error = extract_channel_id(channel_url)
+        if error:
+            return jsonify({'error': '채널 ID를 확인하는 중 오류가 발생했습니다.', 'details': error}), 500
         if not channel_id:
             return jsonify({'error': '유효하지 않은 채널 URL입니다'}), 400
         
         # 1. 채널 분석
-        channel_analysis = analyze_channel(channel_id, keys['youtube'])
+        channel_analysis, error = analyze_channel(channel_id)
+        if error:
+            return jsonify({'error': '채널 분석 중 오류가 발생했습니다.', 'details': error}), 500
         if not channel_analysis:
             return jsonify({'error': '채널 정보를 가져올 수 없습니다'}), 500
         
         # 2. 트렌드 분석
-        trending = get_trending_topics(keys['youtube'])
+        trending = get_trending_topics()
         
         # 3. 프롬프트 생성
         prompt = create_planning_prompt(channel_analysis, trending, user_topic, user_keywords, video_length)
         
         # 4. AI 기획안 생성
-        plan = call_gemini(prompt, keys['gemini'])
+        plan = call_gemini(prompt, gemini_key)
         
         if not plan:
             return jsonify({'error': '기획안 생성에 실패했습니다'}), 500
@@ -258,27 +244,59 @@ def generate_plan():
 # 유틸리티 함수
 # ============================================================
 
+def convert_handle_to_channel_id(handle):
+    """핸들명(@username)을 채널 ID로 변환 (API 키 로테이션 적용)"""
+    try:
+        handle = handle.lstrip('@')
+        print(f"[CONVERT] Searching for handle: {handle}")
+        
+        url = 'https://www.googleapis.com/youtube/v3/search'
+        params = {
+            'part': 'snippet',
+            'q': handle,
+            'type': 'channel',
+            'maxResults': 5
+        }
+        
+        data, error = make_youtube_api_request(url, params)
+        if error:
+            return None, error
+
+        if data and 'items' in data and len(data['items']) > 0:
+            # 핸들명과 가장 유사한 채널을 찾음
+            for item in data['items']:
+                channel_title = item['snippet']['title'].lower()
+                if handle.lower() in channel_title or channel_title in handle.lower():
+                    return item['snippet']['channelId'], None
+            # 정확히 일치하지 않으면 첫 번째 결과 반환
+            return data['items'][0]['snippet']['channelId'], None
+        
+        return None, "Channel not found by handle."
+    except Exception as e:
+        return None, str(e)
+
 def extract_channel_id(url):
-    """URL에서 채널 ID 추출"""
+    """URL에서 채널 ID 추출 (API 키 로테이션 적용)"""
     import re
     
-    # @핸들 형식
+    # @핸들 URL 형식
     handle_match = re.search(r'youtube\.com/@([^/\?]+)', url)
     if handle_match:
-        # 핸들을 채널 ID로 변환하는 API 호출 필요
-        # 여기서는 간단히 핸들 반환
-        return f"@{handle_match.group(1)}"
+        handle = handle_match.group(1)
+        return convert_handle_to_channel_id(handle)
     
-    # 채널 ID 형식
+    # 채널 ID URL 형식
     id_match = re.search(r'youtube\.com/channel/([^/\?]+)', url)
     if id_match:
-        return id_match.group(1)
+        return id_match.group(1), None
     
-    # URL이 아닌 경우 그대로 반환
-    if url.startswith('UC') or url.startswith('@'):
-        return url
+    # URL이 아닌 직접 입력 형식
+    if url.startswith('UC') and len(url) == 24:
+        return url, None
+    elif url.startswith('@'):
+        return convert_handle_to_channel_id(url)
     
-    return None
+    return None, "Invalid channel URL or handle format."
 
 def create_planning_prompt(channel_analysis, trending, user_topic, user_keywords, video_length):
     """AI 프롬프트 생성"""
