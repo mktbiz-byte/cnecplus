@@ -489,3 +489,53 @@ def get_content_ideas():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+
+
+
+@ai_bp.route('/title-optimizer', methods=['POST'])
+def optimize_title():
+    """제목 최적화 엔드포인트"""
+    try:
+        data = request.get_json()
+        title = data.get('title', '').strip()
+        
+        if not title:
+            return jsonify({'error': '제목을 입력해주세요'}), 400
+        
+        # AI 프롬프트 생성
+        prompt = f"""
+당신은 YouTube 제목 최적화 전문가입니다. 다음 제목을 분석하고 클릭률을 높일 수 있는 5가지 대안 제목을 제안해주세요.
+
+원본 제목: {title}
+
+다음 기준으로 제목을 개선해주세요:
+1. 클릭 유도 요소 추가 (호기심, 긴급성, 감정)
+2. 검색 최적화 (주요 키워드 포함)
+3. 적절한 길이 (50-70자 권장)
+4. 명확한 가치 제안
+5. 타겟 시청자 고려
+
+각 제목에 대해 간단한 설명을 추가해주세요.
+
+형식:
+1. [제목]
+   - 개선 포인트: [설명]
+
+2. [제목]
+   - 개선 포인트: [설명]
+
+...
+"""
+        
+        # Gemini API 호출
+        result = call_gemini_api(prompt)
+        
+        if not result:
+            return jsonify({'error': 'AI 응답을 받지 못했습니다'}), 500
+        
+        return jsonify({'result': result}), 200
+        
+    except Exception as e:
+        print(f"Error in optimize_title: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
