@@ -2,11 +2,9 @@
 특별 계정 모델 (영상 기획안 전용)
 """
 
-from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-
-db = SQLAlchemy()
+from src.models.user import db
 
 class SpecialUser(db.Model):
     """특별 계정 (관리자가 직접 발급)"""

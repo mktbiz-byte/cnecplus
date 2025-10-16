@@ -77,7 +77,7 @@ def log_channel_search(query, result_data, ip_address, user_agent):
         import json
         history = SearchHistory(
             search_type='channel',
-            query=query,
+            search_query=query,
             result_data=json.dumps(result_data) if result_data else None,
             ip_address=ip_address,
             user_agent=user_agent
