@@ -193,7 +193,7 @@ def get_channel_score():
         
         # 4. AI 평가 프롬프트 생성
         prompt = f"""
-당신은 YouTube 채널 분석 전문가입니다. 다음 채널을 0-10점 척도로 평가해주세요.
+당신은 YouTube 채널 분석 전문가입니다. 다음 채널을 5가지 기준으로 0-10점 척도로 평가해주세요.
 
 채널 정보:
 - 채널명: {channel_name}
@@ -204,26 +204,33 @@ def get_channel_score():
 - 평균 좋아요 (최근 20개 영상): {avg_likes:,.0f}개
 - 평균 댓글 (최근 20개 영상): {avg_comments:,.0f}개
 
-다음 기준으로 평가해주세요:
-1. 채널 성장 가능성 (0-10점)
-2. 콘텐츠 품질 (0-10점)
-3. 시청자 참여도 (0-10점)
-4. 협업 가치 (0-10점)
+다음 형식으로 JSON 응답해주세요:
 
-응답 형식 (JSON):
 {{
-  "total_score": 8.5,
-  "growth_potential": 9.0,
-  "content_quality": 8.5,
-  "engagement": 8.0,
-  "collaboration_value": 8.5,
-  "summary": "이 채널은...",
-  "strengths": ["강점 1", "강점 2", "강점 3"],
-  "weaknesses": ["약점 1", "약점 2"],
-  "recommendations": ["추천사항 1", "추천사항 2", "추천사항 3"]
+  "content_quality": {{
+    "score": 8.5,
+    "reason": "영상 품질이 뛰어나고 편집이 전문적입니다"
+  }},
+  "viewer_engagement": {{
+    "score": 7.5,
+    "reason": "좋아요와 댓글 반응이 좋은 편입니다"
+  }},
+  "upload_consistency": {{
+    "score": 9.0,
+    "reason": "규칙적인 업로드 주기를 유지하고 있습니다"
+  }},
+  "growth_potential": {{
+    "score": 8.0,
+    "reason": "트렌드를 잘 활용하면 빠른 성장 가능성이 있습니다"
+  }},
+  "title_optimization": {{
+    "score": 6.5,
+    "reason": "제목에 클릭 유도 요소를 더 추가하면 좋습니다"
+  }},
+  "overall_summary": "이 채널은 전반적으로 우수한 품질을 보여주고 있으며, 규칙적인 업로드와 좋은 시청자 반응을 얻고 있습니다. 제목 최적화와 트렌드 활용을 개선하면 더 빠른 성장을 기대할 수 있습니다."
 }}
 
-JSON 형식으로만 응답해주세요.
+JSON 형식으로만 응답해주세요. 각 항목에 대해 0-10점 사이의 점수와 구체적인 이유를 제시해주세요.
 """
         
         # 5. AI 평가 실행
