@@ -274,15 +274,32 @@ def get_channel_videos(channel_id):
                 'commentCount': 0
             })
             
+            view_count = video_stats['viewCount']
+            like_count = video_stats['likeCount']
+            comment_count = video_stats['commentCount']
+            
+            # 텍스트 형식 변환
+            def format_count(count):
+                if count >= 1000000:
+                    return f"{count/1000000:.1f}M"
+                elif count >= 1000:
+                    return f"{count/1000:.1f}K"
+                return str(count)
+            
             videos.append({
                 'id': video_id,
                 'title': item['snippet']['title'],
                 'description': item['snippet']['description'],
                 'publishedAt': item['snippet']['publishedAt'],
                 'thumbnail': item['snippet']['thumbnails']['high']['url'],
-                'viewCount': video_stats['viewCount'],
-                'likeCount': video_stats['likeCount'],
-                'commentCount': video_stats['commentCount']
+                'thumbnails': [{'url': item['snippet']['thumbnails']['high']['url']}],
+                'channelTitle': item['snippet']['channelTitle'],
+                'viewCount': view_count,
+                'likeCount': like_count,
+                'commentCount': comment_count,
+                'viewCountText': f"{format_count(view_count)} 조회",
+                'likeCountText': format_count(like_count),
+                'commentCountText': format_count(comment_count)
             })
         
         return jsonify({'videos': videos})
