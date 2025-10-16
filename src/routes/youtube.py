@@ -482,15 +482,32 @@ def get_trends():
         
         data = response.json()
         
+        # 텍스트 형식 변환 함수
+        def format_count(count):
+            if count >= 1000000:
+                return f"{count/1000000:.1f}M"
+            elif count >= 1000:
+                return f"{count/1000:.1f}K"
+            return str(count)
+        
         trends = []
         for item in data.get('items', []):
+            view_count = int(item['statistics'].get('viewCount', 0))
+            like_count = int(item['statistics'].get('likeCount', 0))
+            comment_count = int(item['statistics'].get('commentCount', 0))
+            
             trends.append({
                 'id': item['id'],
                 'title': item['snippet']['title'],
                 'channelTitle': item['snippet']['channelTitle'],
                 'thumbnail': item['snippet']['thumbnails']['high']['url'],
-                'views': int(item['statistics'].get('viewCount', 0)),
-                'likes': int(item['statistics'].get('likeCount', 0))
+                'thumbnails': [{'url': item['snippet']['thumbnails']['high']['url']}],
+                'views': view_count,
+                'likes': like_count,
+                'comments': comment_count,
+                'viewCountText': f"{format_count(view_count)} 조회",
+                'likeCountText': format_count(like_count),
+                'commentCountText': format_count(comment_count)
             })
         
         return jsonify({'trends': trends})
