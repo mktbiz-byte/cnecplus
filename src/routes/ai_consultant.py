@@ -13,35 +13,49 @@ _gemini_keys_cache = None
 
 def get_gemini_api_keys():
     """
-    환경변수에서 Gemini API 키 목록 가져오기
-    
-    환경변수 형식:
-    - GEMINI_API_KEY: 단일 키
-    - GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...: 여러 키
+    config 파일 또는 환경변수에서 Gemini API 키 목록 가져오기
     
     Returns:
         list: API 키 리스트
     """
     global _gemini_keys_cache
-    
-    # 캐시된 키가 있으면 반환
     if _gemini_keys_cache is not None:
         return _gemini_keys_cache
-    
+
     api_keys = []
-    
-    # 단일 키 확인
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'api_keys.json')
+
+    # 1. config 파일에서 키 로드
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                keys = config.get('gemini_keys')  # Check for plural first
+                if not keys:
+                    key = config.get('gemini_api_key') # Check for singular
+                    if key: keys = [key]
+                if isinstance(keys, list):
+                    api_keys.extend(keys)
+                elif isinstance(keys, str):
+                    api_keys.append(keys)
+        except Exception as e:
+            print(f"Error reading config file: {e}")
+
+    # 2. 환경 변수에서 키 로드 (중복 방지)
+    existing_keys = set(api_keys)
     single_key = os.getenv('GEMINI_API_KEY')
-    if single_key:
+    if single_key and single_key not in existing_keys:
         api_keys.append(single_key)
-    
-    # 여러 키 확인 (GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...)
+        existing_keys.add(single_key)
+
     index = 1
     while True:
         key = os.getenv(f'GEMINI_API_KEY_{index}')
         if not key:
             break
-        api_keys.append(key)
+        if key not in existing_keys:
+            api_keys.append(key)
+            existing_keys.add(key)
         index += 1
     
     # 중복 제거
@@ -84,35 +98,49 @@ _youtube_keys_cache = None
 
 def get_youtube_api_keys():
     """
-    환경변수에서 YouTube API 키 목록 가져오기
-    
-    환경변수 형식:
-    - YOUTUBE_API_KEY: 단일 키
-    - YOUTUBE_API_KEY_1, YOUTUBE_API_KEY_2, ...: 여러 키
+    config 파일 또는 환경변수에서 YouTube API 키 목록 가져오기
     
     Returns:
         list: API 키 리스트
     """
     global _youtube_keys_cache
-    
-    # 캐시된 키가 있으면 반환
     if _youtube_keys_cache is not None:
         return _youtube_keys_cache
-    
+
     api_keys = []
-    
-    # 단일 키 확인
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', 'api_keys.json')
+
+    # 1. config 파일에서 키 로드
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                keys = config.get('youtube_keys') # Check for plural first
+                if not keys:
+                    key = config.get('youtube_api_key') # Check for singular
+                    if key: keys = [key]
+                if isinstance(keys, list):
+                    api_keys.extend(keys)
+                elif isinstance(keys, str):
+                    api_keys.append(keys)
+        except Exception as e:
+            print(f"Error reading config file: {e}")
+
+    # 2. 환경 변수에서 키 로드 (중복 방지)
+    existing_keys = set(api_keys)
     single_key = os.getenv('YOUTUBE_API_KEY')
-    if single_key:
+    if single_key and single_key not in existing_keys:
         api_keys.append(single_key)
-    
-    # 여러 키 확인 (YOUTUBE_API_KEY_1, YOUTUBE_API_KEY_2, ...)
+        existing_keys.add(single_key)
+
     index = 1
     while True:
         key = os.getenv(f'YOUTUBE_API_KEY_{index}')
         if not key:
             break
-        api_keys.append(key)
+        if key not in existing_keys:
+            api_keys.append(key)
+            existing_keys.add(key)
         index += 1
     
     # 중복 제거
@@ -177,9 +205,12 @@ def call_gemini_api(prompt, api_key, model='gemini-1.5-flash'):
     }
     
     try:
+        print(f"Calling Gemini API with model: {model}")
         response = requests.post(url, headers=headers, json=data, timeout=120)
+        print(f"Response status: {response.status_code}")
         response.raise_for_status()
         result = response.json()
+        print(f"Response received: {len(str(result))} chars")
         
         # 응답에서 텍스트 추출
         if 'candidates' in result and len(result['candidates']) > 0:
@@ -196,6 +227,7 @@ def call_gemini_api(prompt, api_key, model='gemini-1.5-flash'):
 
 def get_channel_videos(channel_id, api_key, max_results=20):
     """채널의 최신 영상 가져오기"""
+    print(f"[DEBUG] get_channel_videos for {channel_id} with key ...{api_key[-4:]}")
     try:
         # 1. 채널의 업로드 플레이리스트 ID 가져오기
         channel_url = 'https://www.googleapis.com/youtube/v3/channels'
@@ -209,6 +241,8 @@ def get_channel_videos(channel_id, api_key, max_results=20):
         channel_data = channel_response.json()
         
         if 'items' not in channel_data or len(channel_data['items']) == 0:
+            print(f"[DEBUG] Channel not found or no contentDetails for {channel_id}")
+            print("[DEBUG] No video IDs found to fetch details.")
             return []
         
         uploads_playlist_id = channel_data['items'][0]['contentDetails']['relatedPlaylists']['uploads']
@@ -227,10 +261,14 @@ def get_channel_videos(channel_id, api_key, max_results=20):
         
         # 3. 동영상 ID 수집
         video_ids = []
-        for item in videos_data.get('items', []):
-            video_ids.append(item['snippet']['resourceId']['videoId'])
+        if 'items' in videos_data:
+            for item in videos_data.get('items', []):
+                video_ids.append(item['snippet']['resourceId']['videoId'])
+        else:
+            print(f"[DEBUG] No items in playlist response: {videos_data}")
         
         # 4. 동영상 상세 정보 가져오기
+        print(f"[DEBUG] Found {len(video_ids)} video IDs.")
         if video_ids:
             details_url = 'https://www.googleapis.com/youtube/v3/videos'
             details_params = {
@@ -253,9 +291,13 @@ def get_channel_videos(channel_id, api_key, max_results=20):
             
             return videos
         
+        print("[DEBUG] No video IDs found to fetch details.")
         return []
+
     except Exception as e:
-        print(f"Error getting videos: {e}")
+        import traceback
+        print(f"[ERROR] in get_channel_videos: {e}")
+        print(traceback.format_exc())
         return []
 
 @ai_bp.route('/analyze', methods=['POST'])
@@ -358,7 +400,7 @@ def analyze_channel():
 한국어로 작성하고, 실제 데이터에 기반한 구체적이고 실용적인 조언을 제공해주세요."""
 
         # Gemini API 호출 (Gemini 1.5 Pro - 깊이 있는 분석용)
-        analysis = call_gemini_api(prompt, gemini_api_key, model='gemini-1.5-pro')
+        analysis = call_gemini_api(prompt, gemini_api_key, model='gemini-2.0-flash-exp')
         
         if analysis:
             return jsonify({'analysis': analysis})
@@ -392,20 +434,30 @@ def generate_content_ideas():
         # 실제 영상 데이터 가져오기
         videos = get_channel_videos(channel_id, youtube_api_key, max_results=20)
         
-        if not videos:
-            return jsonify({'error': 'Failed to fetch channel videos'}), 500
+        # 영상 데이터가 있으면 사용
+        if videos:
+            videos_sorted = sorted(videos, key=lambda x: x['views'], reverse=True)
+            top_videos = videos_sorted[:10]
+        else:
+            top_videos = []
         
-        videos_sorted = sorted(videos, key=lambda x: x['views'], reverse=True)
-        top_videos = videos_sorted[:10]
+        # 프롬프트 구성
+        if top_videos:
+            video_info = f"""
+**인기 영상 Top 10:**
+{chr(10).join([f"{i+1}. {v['title']} (조회수: {v['views']:,})" for i, v in enumerate(top_videos)])}
+"""
+        else:
+            video_info = """
+**참고:** 영상 데이터를 가져올 수 없어 채널 정보만으로 분석합니다.
+"""
         
-        prompt = f"""당신은 YouTube 콘텐츠 기획 전문가입니다. 다음 채널의 **실제 인기 영상 데이터**를 분석하여 이 채널 스타일에 맞는 새로운 콘텐츠 아이디어 10개를 제안해주세요.
+        prompt = f"""당신은 YouTube 콘텐츠 기획 전문가입니다. 다음 채널에 맞는 새로운 콘텐츠 아이디어 10개를 제안해주세요.
 
 **채널 정보:**
 - 채널명: {channel_data.get('title', 'N/A')}
 - 채널 설명: {channel_data.get('description', 'N/A')}
-
-**인기 영상 Top 10:**
-{chr(10).join([f"{i+1}. {v['title']} (조회수: {v['views']:,})" for i, v in enumerate(top_videos)])}
+{video_info}
 
 **요청사항:**
 1. 위 인기 영상들의 패턴을 분석하세요
@@ -426,8 +478,8 @@ def generate_content_ideas():
 
 한국어로 작성하고, 이 채널의 실제 데이터에 기반한 구체적인 아이디어를 제공해주세요."""
 
-        # Gemini 1.5 Flash - 빠른 아이디어 생성
-        ideas = call_gemini_api(prompt, gemini_api_key, model='gemini-1.5-flash')
+        # Gemini 2.0 Flash - 빠른 아이디어 생성
+        ideas = call_gemini_api(prompt, gemini_api_key, model='gemini-2.0-flash-exp')
         
         if ideas:
             return jsonify({'ideas': ideas})
@@ -435,8 +487,11 @@ def generate_content_ideas():
             return jsonify({'error': 'Failed to generate ideas'}), 500
     
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         print(f"Error in generate_content_ideas: {e}")
-        return jsonify({'error': str(e)}), 500
+        print(f"Traceback: {error_details}")
+        return jsonify({'error': str(e), 'details': error_details}), 500
 
 @ai_bp.route('/title-optimizer', methods=['POST'])
 def optimize_title():

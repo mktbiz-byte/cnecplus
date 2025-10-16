@@ -19,6 +19,12 @@ from src.routes.trends import trends_bp
 from src.routes.beauty import beauty_bp
 from src.routes.admin_auth import admin_auth_bp, init_admin_user
 from src.routes.database import database_bp
+from src.routes.video_planner import video_planner_bp
+from src.routes.video_planner_v2 import video_planner_v2_bp
+from src.routes.special_user_auth import special_user_bp
+from src.routes.special_auth import special_auth_bp
+from src.routes.creator_contact import creator_contact_bp
+from src.routes.search_history_routes import search_history_bp
 from src.middleware.visitor_tracker import track_visitor
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
@@ -37,6 +43,12 @@ app.register_blueprint(trends_bp, url_prefix='/api/trends')
 app.register_blueprint(beauty_bp, url_prefix='/api/beauty')
 app.register_blueprint(admin_auth_bp, url_prefix='/api/admin-auth')
 app.register_blueprint(database_bp, url_prefix='/api/database')
+app.register_blueprint(video_planner_bp, url_prefix='/api/video-planner-old')
+app.register_blueprint(video_planner_v2_bp)  # /api/video-planner
+app.register_blueprint(special_user_bp)  # /api/special-user
+app.register_blueprint(special_auth_bp, url_prefix='/api/special-auth')
+app.register_blueprint(creator_contact_bp, url_prefix='/api/creator-contact')
+app.register_blueprint(search_history_bp)  # /api/search-history
 
 # 저장된 API 키 로드
 init_api_keys()
@@ -84,4 +96,5 @@ def serve(path):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
+
 
