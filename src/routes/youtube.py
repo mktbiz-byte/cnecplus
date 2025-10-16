@@ -240,14 +240,49 @@ def get_channel_videos(channel_id):
         
         data = response.json()
         
+        # 비디오 ID 목록 추출
+        video_ids = [item['id']['videoId'] for item in data.get('items', [])]
+        
+        # 비디오 통계 정보 가져오기 (조회수, 좋아요, 댓글 수)
+        stats_map = {}
+        if video_ids:
+            # 한 번에 최대 50개까지 조회 가능
+            stats_url = 'https://www.googleapis.com/youtube/v3/videos'
+            stats_params = {
+                'part': 'statistics',
+                'id': ','.join(video_ids),
+                'key': api_key
+            }
+            stats_response = requests.get(stats_url, params=stats_params)
+            if stats_response.status_code == 200:
+                stats_data = stats_response.json()
+                for video in stats_data.get('items', []):
+                    video_id = video['id']
+                    stats = video.get('statistics', {})
+                    stats_map[video_id] = {
+                        'viewCount': int(stats.get('viewCount', 0)),
+                        'likeCount': int(stats.get('likeCount', 0)),
+                        'commentCount': int(stats.get('commentCount', 0))
+                    }
+        
         videos = []
         for item in data.get('items', []):
+            video_id = item['id']['videoId']
+            video_stats = stats_map.get(video_id, {
+                'viewCount': 0,
+                'likeCount': 0,
+                'commentCount': 0
+            })
+            
             videos.append({
-                'id': item['id']['videoId'],
+                'id': video_id,
                 'title': item['snippet']['title'],
                 'description': item['snippet']['description'],
                 'publishedAt': item['snippet']['publishedAt'],
-                'thumbnail': item['snippet']['thumbnails']['high']['url']
+                'thumbnail': item['snippet']['thumbnails']['high']['url'],
+                'viewCount': video_stats['viewCount'],
+                'likeCount': video_stats['likeCount'],
+                'commentCount': video_stats['commentCount']
             })
         
         return jsonify({'videos': videos})
@@ -257,7 +292,7 @@ def get_channel_videos(channel_id):
 
 @youtube_bp.route('/recommendations/hashtags/<channel_id>', methods=['GET'])
 def get_hashtag_recommendations(channel_id):
-    """채널 기반 해시태그 추천"""
+    """채널 기반 해시태그 추천 (Gemini AI 활용)"""
     api_key = get_youtube_api_key()
     
     if not api_key:
@@ -269,16 +304,115 @@ def get_hashtag_recommendations(channel_id):
         return jsonify({'error': 'Channel not found'}), 404
     
     try:
-        # 임시 해시태그 (실제로는 AI 분석 필요)
+        # 채널 정보 가져오기
+        channel_url = f'https://www.googleapis.com/youtube/v3/channels'
+        channel_params = {
+            'part': 'snippet,statistics',
+            'id': resolved_id,
+            'key': api_key
+        }
+        channel_response = requests.get(channel_url, params=channel_params)
+        
+        if channel_response.status_code != 200:
+            return jsonify({'error': 'Failed to fetch channel info'}), channel_response.status_code
+        
+        channel_data = channel_response.json()
+        if not channel_data.get('items'):
+            return jsonify({'error': 'Channel not found'}), 404
+        
+        channel_info = channel_data['items'][0]
+        channel_title = channel_info['snippet']['title']
+        channel_description = channel_info['snippet']['description']
+        
+        # 최근 동영상 제목 가져오기 (해시태그 분석용)
+        videos_url = 'https://www.googleapis.com/youtube/v3/search'
+        videos_params = {
+            'part': 'snippet',
+            'channelId': resolved_id,
+            'order': 'date',
+            'type': 'video',
+            'maxResults': 10,
+            'key': api_key
+        }
+        videos_response = requests.get(videos_url, params=videos_params)
+        
+        recent_titles = []
+        if videos_response.status_code == 200:
+            videos_data = videos_response.json()
+            recent_titles = [item['snippet']['title'] for item in videos_data.get('items', [])[:10]]
+        
+        # Gemini AI로 해시태그 추천
+        gemini_api_key = os.getenv('GEMINI_API_KEY')
+        if not gemini_api_key:
+            # Fallback: 기본 해시태그
+            hashtags = [
+                '#YouTube', '#콘텐츠', '#크리에이터', '#영상제작',
+                '#브이로그', '#일상', '#리뷰', '#팁'
+            ]
+            return jsonify({'hashtags': hashtags, 'ai_generated': False})
+        
+        # Gemini API 호출
+        gemini_url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={gemini_api_key}'
+        
+        prompt = f"""다음 유튜브 채널을 분석하여 효과적인 해시태그 20개를 추천해주세요.
+
+채널명: {channel_title}
+채널 설명: {channel_description[:500]}
+최근 영상 제목:
+{chr(10).join(['- ' + title for title in recent_titles[:5]])}
+
+요구사항:
+1. 채널의 주제와 콘텐츠 스타일에 맞는 해시태그
+2. 한국어 해시태그 위주로 추천
+3. 트렌디하고 검색량이 많은 해시태그 포함
+4. 일반적인 해시태그(#YouTube, #구독, #좋아요 등)와 특화된 해시태그 혼합
+5. 각 해시태그는 # 기호로 시작
+6. 해시태그만 나열하고, 설명은 제외
+
+출력 형식: #해시태그1 #해시태그2 #해시태그3 ..."""
+        
+        gemini_payload = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 500
+            }
+        }
+        
+        gemini_response = requests.post(gemini_url, json=gemini_payload, timeout=30)
+        
+        if gemini_response.status_code == 200:
+            gemini_data = gemini_response.json()
+            if 'candidates' in gemini_data and len(gemini_data['candidates']) > 0:
+                ai_text = gemini_data['candidates'][0]['content']['parts'][0]['text']
+                
+                # 해시태그 추출
+                import re
+                hashtags = re.findall(r'#[\w가-힣]+', ai_text)
+                
+                if hashtags:
+                    return jsonify({
+                        'hashtags': hashtags[:20],  # 최대 20개
+                        'ai_generated': True
+                    })
+        
+        # AI 실패시 기본 해시태그
         hashtags = [
             '#YouTube', '#콘텐츠', '#크리에이터', '#영상제작',
             '#브이로그', '#일상', '#리뷰', '#팁'
         ]
-        
-        return jsonify({'hashtags': hashtags})
+        return jsonify({'hashtags': hashtags, 'ai_generated': False})
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error in hashtag recommendations: {e}")
+        # 에러 발생시 기본 해시태그
+        hashtags = [
+            '#YouTube', '#콘텐츠', '#크리에이터', '#영상제작',
+            '#브이로그', '#일상', '#리뷰', '#팁'
+        ]
+        return jsonify({'hashtags': hashtags, 'ai_generated': False})
 
 @youtube_bp.route('/recommendations/topics/<channel_id>', methods=['GET'])
 def get_topic_recommendations(channel_id):

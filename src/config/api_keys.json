@@ -1,5 +1,9 @@
 {
   "gemini_api_key": "AIzaSyDuMT2mTZryMArPHuY9YK7RuCjBxF2Xlb8",
-  "youtube_api_key": "AIzaSyCX0TqdHNm-34JYscCZFK95a8jbUDuPfS8"
+  "youtube_api_keys": [
+    "AIzaSyCX0TqdHNm-34JYscCZFK95a8jbUDuPfS8",
+    "AIzaSyBtRVSkJBh8GGTL03N45OzfiTI50QixeP8",
+    "AIzaSyDdS0j7FZ5ldTms4b67UAQCEqkuulYlBWs"
+  ]
 }
 
