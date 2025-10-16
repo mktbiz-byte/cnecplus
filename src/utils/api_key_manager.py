@@ -186,5 +186,6 @@ def make_youtube_api_request(url, params, timeout=10):
             # 네트워크 오류 시에도 키 로테이션 시도
             continue
             
-    return None, "All YouTube API keys have exceeded their quota or failed."
+    # 모든 키가 할당량 초과
+    return None, "QUOTA_EXCEEDED: 모든 YouTube API 키의 할당량이 초과되었습니다. 잠시 후 다시 시도하면 다른 API 키로 접속됩니다."
 
