@@ -165,12 +165,12 @@ def call_gemini_api(prompt, api_key):
         }],
         "generationConfig": {
             "temperature": 0.7,
-            "maxOutputTokens": 4096,
+            "maxOutputTokens": 8192,
         }
     }
     
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=60)
+        response = requests.post(url, headers=headers, json=data, timeout=120)
         response.raise_for_status()
         result = response.json()
         

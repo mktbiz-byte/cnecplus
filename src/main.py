@@ -18,6 +18,7 @@ from src.routes.analytics import analytics_bp
 from src.routes.trends import trends_bp
 from src.routes.beauty import beauty_bp
 from src.routes.admin_auth import admin_auth_bp, init_admin_user
+from src.routes.database import database_bp
 from src.middleware.visitor_tracker import track_visitor
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
@@ -35,6 +36,7 @@ app.register_blueprint(analytics_bp, url_prefix='/api/analytics')
 app.register_blueprint(trends_bp, url_prefix='/api/trends')
 app.register_blueprint(beauty_bp, url_prefix='/api/beauty')
 app.register_blueprint(admin_auth_bp, url_prefix='/api/admin-auth')
+app.register_blueprint(database_bp, url_prefix='/api/database')
 
 # 저장된 API 키 로드
 init_api_keys()

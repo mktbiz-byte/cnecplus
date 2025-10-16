@@ -9,6 +9,8 @@ if os.path.exists(data_api_path) and data_api_path not in sys.path:
 
 from flask import Blueprint, jsonify
 import requests
+from src.utils.cache import cache, get_channel_cache_key, get_videos_cache_key
+from src.models.channel_database import channel_db
 
 youtube_bp = Blueprint('youtube', __name__)
 
@@ -158,8 +160,14 @@ def get_channel(channel_id):
             else:
                 return str(count)
         
+        # 핸들 추출
+        handle = channel['snippet'].get('customUrl', '')
+        if handle and not handle.startswith('@'):
+            handle = '@' + handle
+        
         # 응답 데이터 구성
         result = {
+            'handle': handle,
             'id': channel['id'],
             'title': channel['snippet']['title'],
             'description': channel['snippet']['description'],
@@ -182,6 +190,16 @@ def get_channel(channel_id):
         # 키워드 추가 (있는 경우)
         if 'brandingSettings' in channel and 'channel' in channel['brandingSettings']:
             result['keywords'] = channel['brandingSettings']['channel'].get('keywords', '')
+        
+        # 데이터베이스에 저장
+        try:
+            channel_db.save_channel(result)
+        except Exception as e:
+            print(f"Failed to save channel to database: {e}")
+        
+        # 캐시에 저장 (24시간)
+        cache_key = get_channel_cache_key(channel_id)
+        cache.set(cache_key, result, ttl=86400)
         
         return jsonify(result)
     
