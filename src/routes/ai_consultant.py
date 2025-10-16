@@ -176,54 +176,81 @@ def get_youtube_api_key():
     _youtube_key_index += 1
     
     return key
-
-def call_gemini_api(prompt, api_key, model='gemini-1.5-flash'):
+def call_gemini_api(prompt, api_key=None, model='gemini-2.0-flash-exp', max_retries=3):
     """
-    Gemini REST API 직접 호출
+    Gemini API 호출 (REST API 방식) - 재시도 로직 포함
     
     Args:
-        prompt: 프롬프트 텍스트
-        api_key: Gemini API 키
-        model: 사용할 모델 ('gemini-1.5-pro' 또는 'gemini-1.5-flash')
+        prompt (str): 프롬프트
+        api_key (str): Gemini API 키 (None이면 자동으로 가져옴)
+        model (str): 모델명
+        max_retries (int): 최대 재시도 횟수
+    
+    Returns:
+        str: 생성된 텍스트 또는 None
     """
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    # API 키가 없으면 자동으로 가져오기
+    if api_key is None:
+        api_key = get_gemini_api_key()
     
-    headers = {
-        'Content-Type': 'application/json'
-    }
+    if not api_key:
+        print("No Gemini API key available")
+        return None
     
-    data = {
-        "contents": [{
-            "parts": [{
-                "text": prompt
-            }]
-        }],
-        "generationConfig": {
-            "temperature": 0.7,
-            "maxOutputTokens": 8192,
+    # 모든 Gemini API 키 가져오기
+    all_keys = get_gemini_api_keys() or [api_key]
+    
+    for attempt in range(max_retries):
+        # 현재 시도에 사용할 키 선택
+        current_key = all_keys[attempt % len(all_keys)]
+        
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={current_key}'
+        headers = {
+            'Content-Type': 'application/json'
         }
-    }
+        data = {
+            "contents": [{
+                "parts": [{
+                    "text": prompt
+                }]
+            }],
+            "generationConfig": {
+                "temperature": 0.7,
+                "maxOutputTokens": 8192,
+            }
+        }
+        
+        try:
+            print(f"[Attempt {attempt+1}/{max_retries}] Calling Gemini API with model: {model}, key: ...{current_key[-4:]}")
+            response = requests.post(url, headers=headers, json=data, timeout=120)
+            print(f"Response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                print(f"Response received: {len(str(result))} chars")
+                
+                # 응답에서 텍스트 추출
+                if 'candidates' in result and len(result['candidates']) > 0:
+                    candidate = result['candidates'][0]
+                    if 'content' in candidate and 'parts' in candidate['content']:
+                        parts = candidate['content']['parts']
+                        if len(parts) > 0 and 'text' in parts[0]:
+                            return parts[0]['text']
+            elif response.status_code == 429:
+                print(f"Rate limit exceeded, trying next key...")
+                continue
+            else:
+                print(f"API error: {response.status_code} - {response.text}")
+                continue
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Gemini API error (attempt {attempt+1}): {e}")
+            if attempt < max_retries - 1:
+                print("Retrying with next key...")
+                continue
     
-    try:
-        print(f"Calling Gemini API with model: {model}")
-        response = requests.post(url, headers=headers, json=data, timeout=120)
-        print(f"Response status: {response.status_code}")
-        response.raise_for_status()
-        result = response.json()
-        print(f"Response received: {len(str(result))} chars")
-        
-        # 응답에서 텍스트 추출
-        if 'candidates' in result and len(result['candidates']) > 0:
-            candidate = result['candidates'][0]
-            if 'content' in candidate and 'parts' in candidate['content']:
-                parts = candidate['content']['parts']
-                if len(parts) > 0 and 'text' in parts[0]:
-                    return parts[0]['text']
-        
-        return None
-    except requests.exceptions.RequestException as e:
-        print(f"Gemini API error: {e}")
-        return None
+    print(f"All {max_retries} attempts failed")
+    return None
 
 def get_channel_videos(channel_id, api_key, max_results=20):
     """채널의 최신 영상 가져오기"""
