@@ -98,6 +98,35 @@ def list_users():
         print(f"List users error: {e}")
         return jsonify({'error': '계정 목록 조회 실패'}), 500
 
+@special_user_bp.route('/admin/users', methods=['GET'])
+@admin_required
+def get_users():
+    """특별 계정 목록 조회 (관리자 전용) - 별칭"""
+    return list_users()
+
+@special_user_bp.route('/admin/toggle/<int:user_id>', methods=['POST'])
+@admin_required
+def toggle_user_active(user_id):
+    """특별 계정 활성화/비활성화 토글 (관리자 전용)"""
+    try:
+        user = SpecialUser.query.get(user_id)
+        if not user:
+            return jsonify({'error': '존재하지 않는 계정입니다'}), 404
+        
+        user.is_active = not user.is_active
+        db.session.commit()
+        
+        status = '활성화' if user.is_active else '비활성화'
+        return jsonify({
+            'message': f"계정이 {status}되었습니다",
+            'user': user.to_dict()
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Toggle user error: {e}")
+        return jsonify({'error': '상태 변경 실패'}), 500
+
 @special_user_bp.route('/admin/create', methods=['POST'])
 @admin_required
 def create_user():

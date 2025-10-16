@@ -437,7 +437,9 @@ def analyze_channel():
             return jsonify({'error': 'Failed to generate analysis'}), 500
     
     except Exception as e:
+        import traceback
         print(f"Error in analyze_channel: {e}")
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @ai_bp.route('/content-ideas', methods=['POST'])
