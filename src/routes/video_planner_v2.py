@@ -315,25 +315,25 @@ def create_planning_prompt(channel_analysis, trending, user_topic, user_keywords
     
     prompt = f"""당신은 유튜브 콘텐츠 기획 전문가입니다. 다음 정보를 바탕으로 **크리에이터 맞춤형 영상 기획안**을 작성해주세요.
 
-## 📊 크리에이터 정보
+## 크리에이터 정보
 - **채널명**: {channel_analysis['channel_name']}
 - **구독자**: {channel_analysis['subscriber_count']:,}명
 - **채널 설명**: {channel_analysis['description'][:200]}
 
-## 🔥 인기 영상 Top 5
+## 인기 영상 Top 5
 {top_videos_text}
 
-## 📈 현재 트렌드
+## 현재 트렌드
 {trending_text}
 
-## 🎬 사용자 요청
+## 사용자 요청
 - **주제**: {user_topic}
 - **키워드**: {user_keywords}
 - **영상 길이**: {video_length}
 
 ---
 
-## 📝 작성 요청사항
+## 작성 요청사항
 
 **이 크리에이터의 스타일과 트렌드를 반영하여**, 다음 형식으로 영상 기획안을 작성해주세요:
 

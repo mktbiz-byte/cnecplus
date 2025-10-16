@@ -277,3 +277,208 @@ JSON 형식으로만 응답해주세요.
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+
+
+@ai_bp.route('/analyze', methods=['POST'])
+def analyze_channel():
+    """채널 AI 분석 및 성장 조언"""
+    try:
+        channel_data = request.json
+        channel_id = channel_data.get('channel_id')
+        channel_name = channel_data.get('name', '알 수 없음')
+        
+        if not channel_id:
+            return jsonify({'error': 'Channel ID not provided'}), 400
+        
+        print(f"[AI_ANALYZE] Analyzing channel: {channel_id}")
+        
+        # 채널 정보 가져오기
+        channel_url = 'https://www.googleapis.com/youtube/v3/channels'
+        channel_params = {
+            'part': 'snippet,statistics',
+            'id': channel_id
+        }
+        
+        channel_info, error = make_youtube_api_request(channel_url, channel_params)
+        if error or not channel_info or 'items' not in channel_info or len(channel_info['items']) == 0:
+            return jsonify({'error': f'Failed to get channel info: {error}'}), 500
+        
+        channel = channel_info['items'][0]
+        channel_name = channel['snippet']['title']
+        channel_description = channel['snippet'].get('description', '')
+        subscriber_count = int(channel['statistics'].get('subscriberCount', 0))
+        video_count = int(channel['statistics'].get('videoCount', 0))
+        total_views = int(channel['statistics'].get('viewCount', 0))
+        
+        # 최근 영상 가져오기
+        videos = get_channel_videos(channel_id, max_results=10)
+        
+        if not videos:
+            return jsonify({'error': 'Failed to get channel videos'}), 500
+        
+        # 영상 통계 분석
+        avg_views = sum(v['views'] for v in videos) / len(videos) if videos else 0
+        avg_likes = sum(v['likes'] for v in videos) / len(videos) if videos else 0
+        avg_comments = sum(v['comments'] for v in videos) / len(videos) if videos else 0
+        
+        # 최근 영상 제목
+        recent_titles = [v['title'] for v in videos[:5]]
+        
+        # AI 분석 프롬프트
+        prompt = f"""당신은 YouTube 채널 성장 전문 컨설턴트입니다. 다음 채널을 분석하고 구체적인 성장 전략을 제시해주세요.
+
+채널 정보:
+- 채널명: {channel_name}
+- 채널 설명: {channel_description[:300]}
+- 구독자 수: {subscriber_count:,}명
+- 총 영상 수: {video_count}개
+- 총 조회수: {total_views:,}회
+- 평균 조회수 (최근 10개 영상): {avg_views:,.0f}회
+- 평균 좋아요: {avg_likes:,.0f}개
+- 평균 댓글: {avg_comments:,.0f}개
+
+최근 영상 제목:
+{chr(10).join(['- ' + title for title in recent_titles])}
+
+다음 형식으로 분석해주세요:
+
+## 채널 현황 분석
+
+### 강점
+- (채널의 강점 3가지)
+
+### 개선이 필요한 부분
+- (개선이 필요한 부분 3가지)
+
+## 성장 전략
+
+### 1. 콘텐츠 전략
+- (구체적인 콘텐츠 개선 방안)
+
+### 2. 시청자 참여도 향상
+- (댓글, 좋아요, 구독 유도 전략)
+
+### 3. SEO 최적화
+- (제목, 설명, 태그 최적화 방안)
+
+### 4. 업로드 전략
+- (업로드 주기, 시간대 등)
+
+## 단기 목표 (1-3개월)
+- (달성 가능한 구체적 목표 3가지)
+
+## 장기 목표 (6-12개월)
+- (장기적 성장 목표 3가지)
+
+한국어로 작성하고, 실행 가능한 구체적인 조언을 제공해주세요."""
+
+        # AI 분석 실행
+        print("[AI_ANALYZE] Calling Gemini API...")
+        ai_response = call_gemini_api(prompt)
+        
+        if not ai_response:
+            return jsonify({'error': 'Failed to get AI analysis'}), 500
+        
+        return jsonify({'analysis': ai_response}), 200
+        
+    except Exception as e:
+        print(f"[AI_ANALYZE] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@ai_bp.route('/content-ideas', methods=['POST'])
+def get_content_ideas():
+    """채널 맞춤형 콘텐츠 아이디어 생성"""
+    try:
+        channel_data = request.json
+        channel_id = channel_data.get('channel_id')
+        
+        if not channel_id:
+            return jsonify({'error': 'Channel ID not provided'}), 400
+        
+        print(f"[CONTENT_IDEAS] Generating ideas for channel: {channel_id}")
+        
+        # 채널 정보 가져오기
+        channel_url = 'https://www.googleapis.com/youtube/v3/channels'
+        channel_params = {
+            'part': 'snippet,statistics',
+            'id': channel_id
+        }
+        
+        channel_info, error = make_youtube_api_request(channel_url, channel_params)
+        if error or not channel_info or 'items' not in channel_info or len(channel_info['items']) == 0:
+            return jsonify({'error': f'Failed to get channel info: {error}'}), 500
+        
+        channel = channel_info['items'][0]
+        channel_name = channel['snippet']['title']
+        channel_description = channel['snippet'].get('description', '')
+        
+        # 최근 영상 가져오기
+        videos = get_channel_videos(channel_id, max_results=10)
+        
+        if not videos:
+            return jsonify({'error': 'Failed to get channel videos'}), 500
+        
+        # 최근 영상 제목
+        recent_titles = [v['title'] for v in videos[:10]]
+        
+        # 인기 영상 (조회수 기준)
+        popular_videos = sorted(videos, key=lambda x: x['views'], reverse=True)[:5]
+        popular_titles = [v['title'] for v in popular_videos]
+        
+        # AI 아이디어 생성 프롬프트
+        prompt = f"""당신은 YouTube 콘텐츠 기획 전문가입니다. 다음 채널을 위한 창의적이고 실용적인 콘텐츠 아이디어 10개를 제안해주세요.
+
+채널 정보:
+- 채널명: {channel_name}
+- 채널 설명: {channel_description[:300]}
+
+최근 영상 제목:
+{chr(10).join(['- ' + title for title in recent_titles])}
+
+인기 영상 제목:
+{chr(10).join(['- ' + title for title in popular_titles])}
+
+다음 형식으로 10개의 콘텐츠 아이디어를 제안해주세요:
+
+## 콘텐츠 아이디어 Top 10
+
+### 1. [아이디어 제목]
+**개요:** [영상 내용 설명]
+**예상 제목:** "[클릭을 유도하는 제목]"
+**타겟 시청자:** [누구를 위한 콘텐츠인지]
+**예상 효과:** [조회수, 참여도 등 기대 효과]
+
+### 2. [아이디어 제목]
+**개요:** [영상 내용 설명]
+**예상 제목:** "[클릭을 유도하는 제목]"
+**타겟 시청자:** [누구를 위한 콘텐츠인지]
+**예상 효과:** [조회수, 참여도 등 기대 효과]
+
+(3-10번까지 동일한 형식으로)
+
+## 시리즈 기획 제안
+- (연속성 있는 콘텐츠 시리즈 아이디어 2-3개)
+
+## 협업 아이디어
+- (다른 크리에이터와의 협업 아이디어 2-3개)
+
+한국어로 작성하고, 이 채널의 스타일과 시청자층에 맞는 실행 가능한 아이디어를 제공해주세요."""
+
+        # AI 아이디어 생성 실행
+        print("[CONTENT_IDEAS] Calling Gemini API...")
+        ai_response = call_gemini_api(prompt)
+        
+        if not ai_response:
+            return jsonify({'error': 'Failed to generate content ideas'}), 500
+        
+        return jsonify({'ideas': ai_response}), 200
+        
+    except Exception as e:
+        print(f"[CONTENT_IDEAS] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
