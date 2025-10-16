@@ -58,7 +58,7 @@ class ApiKeyManager:
 
         # 2. 환경 변수에서 키 로드 (파일 설정보다 우선)
         # Gemini API 키 로드 (GEMINI_API_KEY, GEMINI_API_KEY_1, GEMINI_API_KEY_2, ...)
-        for i in range(10):
+        for i in range(100):  # GEMINI_API_KEY_0 ~ GEMINI_API_KEY_99 까지 지원
             key_name = f'GEMINI_API_KEY_{i}' if i > 0 else 'GEMINI_API_KEY'
             gemini_key = os.getenv(key_name)
             if gemini_key and gemini_key not in self.gemini_keys:
@@ -73,7 +73,7 @@ class ApiKeyManager:
             self.youtube_keys.extend(new_keys)
         
         # 단일 YouTube 키 환경 변수 지원 (YOUTUBE_API_KEY, YOUTUBE_API_KEY_1, YOUTUBE_API_KEY_2, ...)
-        for i in range(10):  # YOUTUBE_API_KEY_0 ~ YOUTUBE_API_KEY_9 까지 지원
+        for i in range(100):  # YOUTUBE_API_KEY_0 ~ YOUTUBE_API_KEY_99 까지 지원
             key_name = f'YOUTUBE_API_KEY_{i}' if i > 0 else 'YOUTUBE_API_KEY'
             youtube_key = os.getenv(key_name)
             if youtube_key and youtube_key not in self.youtube_keys:
