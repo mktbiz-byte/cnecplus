@@ -149,9 +149,16 @@ def get_youtube_api_key():
     
     return key
 
-def call_gemini_api(prompt, api_key):
-    """Gemini REST API 직접 호출"""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+def call_gemini_api(prompt, api_key, model='gemini-1.5-flash'):
+    """
+    Gemini REST API 직접 호출
+    
+    Args:
+        prompt: 프롬프트 텍스트
+        api_key: Gemini API 키
+        model: 사용할 모델 ('gemini-1.5-pro' 또는 'gemini-1.5-flash')
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     
     headers = {
         'Content-Type': 'application/json'
@@ -350,8 +357,8 @@ def analyze_channel():
 
 한국어로 작성하고, 실제 데이터에 기반한 구체적이고 실용적인 조언을 제공해주세요."""
 
-        # Gemini API 호출
-        analysis = call_gemini_api(prompt, gemini_api_key)
+        # Gemini API 호출 (Gemini 1.5 Pro - 깊이 있는 분석용)
+        analysis = call_gemini_api(prompt, gemini_api_key, model='gemini-1.5-pro')
         
         if analysis:
             return jsonify({'analysis': analysis})
@@ -419,7 +426,8 @@ def generate_content_ideas():
 
 한국어로 작성하고, 이 채널의 실제 데이터에 기반한 구체적인 아이디어를 제공해주세요."""
 
-        ideas = call_gemini_api(prompt, gemini_api_key)
+        # Gemini 1.5 Flash - 빠른 아이디어 생성
+        ideas = call_gemini_api(prompt, gemini_api_key, model='gemini-1.5-flash')
         
         if ideas:
             return jsonify({'ideas': ideas})
@@ -471,7 +479,8 @@ def optimize_title():
 
 한국어로 작성해주세요."""
 
-        result = call_gemini_api(prompt, api_key)
+        # Gemini 1.5 Flash - 빠른 제목 최적화
+        result = call_gemini_api(prompt, api_key, model='gemini-1.5-flash')
         
         if result:
             return jsonify({'result': result})
@@ -614,8 +623,8 @@ def get_channel_score():
 
 **중요:** 반드시 위의 JSON 형식으로만 응답하고, 다른 텍스트는 포함하지 마세요."""
 
-        # Gemini API 호출
-        result = call_gemini_api(prompt, gemini_api_key)
+        # Gemini 1.5 Flash - 빠른 해시태그/주제 추천
+        result = call_gemini_api(prompt, gemini_api_key, model='gemini-1.5-flash')
         
         if result:
             # JSON 추출 (```json ... ``` 형식 처리)
