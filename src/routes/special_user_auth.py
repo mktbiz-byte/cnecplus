@@ -222,3 +222,32 @@ def delete_user(user_id):
         print(f"Delete user error: {e}")
         return jsonify({'error': '계정 삭제 실패'}), 500
 
+
+
+
+def init_special_users():
+    """특별 사용자 초기 데이터 생성"""
+    try:
+        # cnecplus 계정 확인
+        existing_user = SpecialUser.query.filter_by(username='cnecplus').first()
+        
+        if not existing_user:
+            # 기본 특별 사용자 생성
+            default_user = SpecialUser(
+                username='cnecplus',
+                display_name='CNEC Plus',
+                created_by='system',
+                notes='기본 특별 계정 - 영상 기획안 생성기 전용'
+            )
+            default_user.set_password('gkdnfoq11@')
+            
+            db.session.add(default_user)
+            db.session.commit()
+            print("✅ Default special user 'cnecplus' created successfully")
+        else:
+            print("ℹ️ Special user 'cnecplus' already exists")
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Failed to initialize special users: {e}")
+

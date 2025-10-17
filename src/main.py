@@ -18,10 +18,10 @@ from src.routes.analytics import analytics_bp
 from src.routes.trends import trends_bp
 from src.routes.beauty import beauty_bp
 from src.routes.admin_auth import admin_auth_bp, init_admin_user
+from src.routes.special_user_auth import special_user_bp, init_special_users
 from src.routes.database import database_bp
 from src.routes.video_planner import video_planner_bp
 from src.routes.video_planner_v2 import video_planner_v2_bp
-from src.routes.special_user_auth import special_user_bp
 from src.routes.special_auth import special_auth_bp
 from src.routes.creator_contact import creator_contact_bp
 from src.routes.search_history_routes import search_history_bp
@@ -77,6 +77,8 @@ with app.app_context():
     db.create_all()
     # 관리자 계정 초기화
     init_admin_user()
+    # 특별 사용자 초기화
+    init_special_users()
 
 # SPA를 위한 catch-all 라우트
 # 중요: 이 라우트는 블루프린트가 매칭되지 않은 경로만 처리합니다
