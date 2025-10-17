@@ -129,9 +129,7 @@ def analyze_channel_performance(channel_id):
                     'publishedAt': video['snippet']['publishedAt'],
                     'views': views,
                     'likes': likes,
-                    'comments': comments,
-                    'engagement_rate': (likes + comments) / views * 100 if views > 0 else 0,
-                    'like_rate': likes / views * 100 if views > 0 else 0
+                    'comments': comments
                 })
         
         # 5. 성과 분석
@@ -145,7 +143,6 @@ def analyze_channel_performance(channel_id):
         avg_views = total_views / len(videos)
         avg_likes = total_likes / len(videos)
         avg_comments = total_comments / len(videos)
-        avg_engagement = sum(v['engagement_rate'] for v in videos) / len(videos)
         
         # 인기 영상 Top 5
         top_videos = sorted(videos, key=lambda x: x['views'], reverse=True)[:5]
@@ -175,7 +172,6 @@ def analyze_channel_performance(channel_id):
                 'avg_views': int(avg_views),
                 'avg_likes': int(avg_likes),
                 'avg_comments': int(avg_comments),
-                'avg_engagement_rate': round(avg_engagement, 2),
                 'avg_title_length': int(avg_title_length),
                 'avg_upload_interval_days': round(avg_upload_interval, 1),
                 'views_per_subscriber': round(views_per_subscriber, 2),
@@ -186,7 +182,7 @@ def analyze_channel_performance(channel_id):
                     'title': v['title'],
                     'views': v['views'],
                     'likes': v['likes'],
-                    'engagement_rate': round(v['engagement_rate'], 2)
+                    'comments': v['comments']
                 } for v in top_videos
             ],
             'bottom_videos': [
@@ -194,12 +190,11 @@ def analyze_channel_performance(channel_id):
                     'title': v['title'],
                     'views': v['views'],
                     'likes': v['likes'],
-                    'engagement_rate': round(v['engagement_rate'], 2)
+                    'comments': v['comments']
                 } for v in bottom_videos
             ],
             'insights': {
                 'performance_vs_subscribers': 'good' if views_per_subscriber > 0.1 else 'needs_improvement',
-                'engagement_level': 'high' if avg_engagement > 5 else 'medium' if avg_engagement > 2 else 'low',
                 'upload_consistency': 'consistent' if avg_upload_interval < 7 else 'irregular'
             }
         }

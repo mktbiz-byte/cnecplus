@@ -211,7 +211,7 @@ def get_channel_score():
     "score": 8.5,
     "reason": "영상 품질이 뛰어나고 편집이 전문적입니다"
   }},
-  "viewer_engagement": {{
+  "viewer_interaction": {{
     "score": 7.5,
     "reason": "좋아요와 댓글 반응이 좋은 편입니다"
   }},
