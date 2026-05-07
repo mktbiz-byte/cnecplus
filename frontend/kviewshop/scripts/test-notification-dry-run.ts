@@ -51,7 +51,7 @@ async function main() {
   console.log('POPBILL_LINK_ID:', process.env.POPBILL_LINK_ID ? 'SET' : 'NOT SET')
   console.log('POPBILL_SECRET_KEY:', process.env.POPBILL_SECRET_KEY ? 'SET' : 'NOT SET')
   console.log('POPBILL_CORP_NUM:', process.env.POPBILL_CORP_NUM ? 'SET' : 'NOT SET')
-  console.log('POPBILL_KAKAO_SENDER_KEY:', process.env.POPBILL_KAKAO_SENDER_KEY ? 'SET' : 'NOT SET')
+  console.log('POPBILL_SMS_SENDER:', process.env.POPBILL_SMS_SENDER ? 'SET' : 'NOT SET')
 
   console.log('\n===== DONE =====')
 }

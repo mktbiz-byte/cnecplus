@@ -6,7 +6,7 @@ const KakaoService = require('popbill/lib/KakaoService')
 const POPBILL_LINK_ID = process.env.POPBILL_LINK_ID ?? ''
 const POPBILL_SECRET_KEY = process.env.POPBILL_SECRET_KEY ?? ''
 const POPBILL_CORP_NUM = process.env.POPBILL_CORP_NUM ?? ''
-const POPBILL_KAKAO_SENDER_KEY = process.env.POPBILL_KAKAO_SENDER_KEY ?? ''
+const POPBILL_SMS_SENDER = process.env.POPBILL_SMS_SENDER ?? ''
 const POPBILL_IS_TEST = process.env.POPBILL_IS_TEST === 'true'
 
 function getKakaoService() {
@@ -43,7 +43,8 @@ export async function sendKakaoAlimtalk(params: {
 
   return new Promise<{ success: boolean; error?: string }>((resolve) => {
     try {
-      // sendATS_one: CorpNum, templateCode, Sender, content, altContent, altSendType, sndDT, receiver, receiverName, success, error
+      // sendATS_one: CorpNum, templateCode, Sender(SMS발신번호), content, altContent, altSendType, sndDT, receiver, receiverName, success, error
+      // Sender = 알림톡 실패 시 대체문자 발신번호 (카카오 채널은 템플릿에 연결됨)
       // altSendType: 'C' = 알림톡 실패 시 대체문자 발송
       const altContent = params.altText || params.message
       const altSendType = 'C'
@@ -52,7 +53,7 @@ export async function sendKakaoAlimtalk(params: {
       kakaoService.sendATS_one(
         POPBILL_CORP_NUM,
         params.templateCode,
-        POPBILL_KAKAO_SENDER_KEY,
+        POPBILL_SMS_SENDER,
         params.message,
         altContent,
         altSendType,
