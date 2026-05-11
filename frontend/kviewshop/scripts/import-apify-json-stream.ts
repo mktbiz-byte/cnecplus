@@ -53,6 +53,7 @@ interface LatestPost {
   displayUrl?: string
   type?: string
   timestamp?: string
+  productType?: string
 }
 
 interface ApifyProfile {
@@ -105,6 +106,50 @@ function calcAvgVideoViews(posts: LatestPost[]): number | null {
   return Math.round(sum / videos.length)
 }
 
+function calcAvgVideoLikes(posts: LatestPost[]): number | null {
+  const videos = (posts ?? []).filter(p => p.type === 'Video')
+  if (videos.length === 0) return null
+  const sum = videos.reduce((s, p) => s + (p.likesCount ?? 0), 0)
+  return Math.round(sum / videos.length)
+}
+
+// Feed = Sidecar, Image (non-video, non-reel)
+function isFeedPost(p: LatestPost): boolean {
+  return p.type !== 'Video' || p.productType === 'feed'
+}
+
+function isReelPost(p: LatestPost): boolean {
+  return p.type === 'Video' && (p.productType === 'clips' || p.productType === 'reels')
+}
+
+function calcAvgFeedLikes(posts: LatestPost[]): number | null {
+  const feeds = (posts ?? []).filter(isFeedPost)
+  if (feeds.length === 0) return null
+  const sum = feeds.reduce((s, p) => s + (p.likesCount ?? 0), 0)
+  return Math.round(sum / feeds.length)
+}
+
+function calcAvgFeedComments(posts: LatestPost[]): number | null {
+  const feeds = (posts ?? []).filter(isFeedPost)
+  if (feeds.length === 0) return null
+  const sum = feeds.reduce((s, p) => s + (p.commentsCount ?? 0), 0)
+  return Math.round(sum / feeds.length)
+}
+
+function calcAvgReelViews(posts: LatestPost[]): number | null {
+  const reels = (posts ?? []).filter(isReelPost)
+  if (reels.length === 0) return null
+  const sum = reels.reduce((s, p) => s + (p.videoViewCount ?? 0), 0)
+  return Math.round(sum / reels.length)
+}
+
+function calcAvgReelLikes(posts: LatestPost[]): number | null {
+  const reels = (posts ?? []).filter(isReelPost)
+  if (reels.length === 0) return null
+  const sum = reels.reduce((s, p) => s + (p.likesCount ?? 0), 0)
+  return Math.round(sum / reels.length)
+}
+
 function getLastPostDate(posts: LatestPost[]): string | null {
   if (!posts || posts.length === 0) return null
   const timestamps = posts
@@ -113,6 +158,13 @@ function getLastPostDate(posts: LatestPost[]): string | null {
     .sort()
     .reverse()
   return timestamps[0] ?? null
+}
+
+function getPostThumbnails(posts: LatestPost[], max = 6): string[] {
+  return (posts ?? [])
+    .slice(0, max)
+    .map(p => p.displayUrl)
+    .filter((url): url is string => !!url)
 }
 
 function truncate(s: string | null, max: number): string | null {
@@ -241,6 +293,10 @@ async function processRecord(
 
     stats.tier[tier] = (stats.tier[tier] ?? 0) + 1
 
+    const lastPostDate = getLastPostDate(posts)
+    const thumbnails = getPostThumbnails(posts)
+    const now = new Date()
+
     const igData = {
       igUsername: username,
       igFollowers: followers,
@@ -250,12 +306,26 @@ async function processRecord(
       igEngagementRate: engagementRate,
       igTier: tier,
       igProfilePicUrl: profile.profilePicUrl || null,
+      // 전체 평균
       igAvgLikes: calcAvgLikes(posts),
       igAvgComments: calcAvgComments(posts),
       igAvgVideoViews: calcAvgVideoViews(posts),
-      igLastUploadDate: getLastPostDate(posts),
-      igDataImportedAt: new Date(),
+      igAvgVideoLikes: calcAvgVideoLikes(posts),
+      // Feed (이미지/캐러셀) 평균
+      igAvgFeedLikes: calcAvgFeedLikes(posts),
+      igAvgFeedComments: calcAvgFeedComments(posts),
+      // Reel 평균
+      igAvgReelViews: calcAvgReelViews(posts),
+      igAvgReelLikes: calcAvgReelLikes(posts),
+      // 포스트 썸네일 + 마지막 업로드
+      igRecentPostThumbnails: thumbnails.length > 0 ? thumbnails : undefined,
+      igLastUploadDate: lastPostDate,
+      igLastPostAt: lastPostDate ? new Date(lastPostDate) : null,
+      // 동기화 추적
+      igDataImportedAt: now,
       igDataSource: DATA_SOURCE,
+      igLastSyncedAt: now,
+      igSyncStatus: 'SUCCESS',
     }
 
     // 기존 Creator 찾기
