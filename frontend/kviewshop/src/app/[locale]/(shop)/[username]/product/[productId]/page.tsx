@@ -5,6 +5,7 @@ import { ProductJsonLd } from '@/components/seo/JsonLd';
 import { buildHreflangAlternates } from '@/lib/seo';
 import { recordRecentView, getRecentViews } from '@/lib/actions/recent-view';
 import { RecentViewsSection } from '@/components/shop/RecentViewsSection';
+import { SimilarProducts } from '@/components/shop/SimilarProducts';
 import type { Metadata } from 'next';
 import type { Product, CampaignProduct, Creator } from '@/types/database';
 
@@ -305,6 +306,9 @@ export default async function ProductPage({ params, searchParams }: ProductPageP
         reelsUrl={shopItemReels?.reelsUrl}
         reelsCaption={shopItemReels?.reelsCaption}
       />
+      <div className="max-w-[480px] mx-auto">
+        <SimilarProducts productId={productId} locale={locale} />
+      </div>
       {filteredRecentViews.length > 0 && (
         <div className="max-w-[480px] mx-auto">
           <RecentViewsSection
