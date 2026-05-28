@@ -36,6 +36,7 @@ interface GongguCampaign {
   id: string;
   title: string;
   endAt: string | null;
+  creatorShopId?: string | null;
   brand: (BrandInfo & { logoUrl: string | null }) | null;
   products: CampaignProduct[];
 }
@@ -103,7 +104,7 @@ export function BuyerHomePage({ locale, creators, gongguCampaigns, topProducts }
         thumbnailUrl: cp.product.thumbnailUrl || cp.product.images?.[0] || null,
         originalPrice: cp.product.originalPrice || 0,
         campaignPrice: cp.campaignPrice,
-        shopId: '', // 타임딜은 검색으로 이동
+        shopId: c.creatorShopId || '',
         campaignId: c.id,
         endAt: c.endAt!,
       })),

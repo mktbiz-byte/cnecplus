@@ -61,7 +61,7 @@ export function RecentViewsHome({ locale }: RecentViewsHomeProps) {
 
           return (
             <Link key={item.id} href={href} className="shrink-0 w-[120px] group">
-              <div className="aspect-square rounded-xl overflow-hidden bg-gray-100">
+              <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
                 {image ? (
                   <Image
                     src={image}

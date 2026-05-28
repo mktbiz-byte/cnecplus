@@ -22,6 +22,13 @@ export const getCachedActiveGonggu = unstable_cache(
             },
           },
         },
+        participations: {
+          where: { status: 'APPROVED' },
+          include: {
+            creator: { select: { shopId: true } },
+          },
+          take: 1,
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 10,
