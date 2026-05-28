@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { Star } from 'lucide-react';
 import type { Product, Campaign } from '@/types/database';
 import { calculateDDay, getDDayLabel } from '@/lib/utils/date';
 import { ProductCardActions } from './ProductCardActions';
@@ -90,6 +91,17 @@ export function ProductCard({ product, campaign, campaignPrice, locale, shopId, 
         </div>
         {discount > 0 && (
           <span className="text-xs text-gray-300 line-through">{formatKRW(product.original_price)}</span>
+        )}
+
+        {/* 별점 + 리뷰 수 */}
+        {(product.review_count ?? 0) > 0 && (
+          <div className="flex items-center gap-1 mt-1">
+            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+            <span className="text-xs text-gray-500">
+              {product.average_rating ? Number(product.average_rating).toFixed(1) : '0.0'}
+            </span>
+            <span className="text-xs text-gray-300">({product.review_count})</span>
+          </div>
         )}
 
         {creatorId && (

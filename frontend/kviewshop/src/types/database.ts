@@ -143,6 +143,8 @@ export interface Product {
   default_commission_rate: number;
   created_at: string;
   updated_at?: string;
+  review_count?: number;
+  average_rating?: number;
   // Joined
   brand?: Brand;
 }
