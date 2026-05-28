@@ -81,6 +81,7 @@ export function ShopBottomNav({ locale, username }: ShopBottomNavProps) {
 
   return (
     <nav
+      aria-label="샵 네비게이션"
       className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#E5E5EA] md:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >

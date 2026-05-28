@@ -5,6 +5,8 @@ import { locales, isRTL, type Locale } from '@/lib/i18n/config';
 import { Providers } from '@/components/providers';
 import { Toaster } from '@/components/ui/sonner';
 import { ChatbotWidget } from '@/components/shop/ChatbotWidget';
+import { CookieConsent } from '@/components/shop/CookieConsent';
+import { ServiceWorkerRegister } from '@/components/shop/ServiceWorkerRegister';
 
 interface LocaleLayoutProps {
   children: React.ReactNode;
@@ -42,11 +44,21 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
         />
       </head>
       <body className="font-body antialiased">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[9999] focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-primary"
+        >
+          {locale === 'ko' ? '본문으로 건너뛰기' : 'Skip to content'}
+        </a>
         <NextIntlClientProvider messages={messages}>
-          <Providers>{children}</Providers>
+          <Providers>
+            <main id="main-content">{children}</main>
+          </Providers>
         </NextIntlClientProvider>
         <Toaster />
         <ChatbotWidget locale={locale} />
+        <CookieConsent locale={locale} />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
