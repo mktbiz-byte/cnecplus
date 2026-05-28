@@ -59,6 +59,8 @@ export function ProductCard({ product, campaign, campaignPrice, locale, shopId, 
             fill
             className="object-cover transition-transform group-hover:scale-105"
             sizes="(max-width: 768px) 50vw, 25vw"
+            placeholder="blur"
+            blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PC9zdmc+"
           />
         ) : (
           <div className="flex h-full items-center justify-center text-gray-400 text-sm">

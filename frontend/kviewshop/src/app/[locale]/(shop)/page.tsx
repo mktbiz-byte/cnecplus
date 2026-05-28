@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { LegalFooter } from '@/components/shop/legal-footer';
 import { BuyerHomePage } from '@/components/buyer/BuyerHomePage';
 import { buildHreflangAlternates } from '@/lib/seo';
+import { getCachedActiveGonggu, getCachedTopCreators, getCachedTopProducts } from '@/lib/cache';
 
 export const revalidate = 120;
 
@@ -193,9 +194,9 @@ export default async function DiscoveryPage({ params }: PageProps) {
   const { locale } = await params;
 
   const [gongguCampaigns, topCreators, topProducts] = await Promise.all([
-    getActiveGonggu(),
-    getTopCreators(),
-    getTopProducts(),
+    getCachedActiveGonggu(),
+    getCachedTopCreators(),
+    getCachedTopProducts(),
   ]);
 
   // Serialize data for client component (Decimal -> number, Date -> string)
