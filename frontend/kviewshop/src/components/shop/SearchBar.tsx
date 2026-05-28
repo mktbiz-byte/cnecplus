@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Search, X } from 'lucide-react';
+import { Search, X, Users } from 'lucide-react';
 
 interface Suggestion {
   products: {
@@ -19,11 +19,36 @@ interface Suggestion {
     brandName: string;
     logoUrl: string | null;
   }[];
+  creators?: {
+    id: string;
+    username: string | null;
+    displayName: string | null;
+    profileImageUrl: string | null;
+    igFollowers: number | null;
+  }[];
+}
+
+function highlightMatch(text: string, query: string) {
+  if (!text || !query) return text;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="text-primary font-semibold">{text.slice(idx, idx + query.length)}</span>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
+function formatFollowers(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }
 
 export function SearchBar({ locale }: { locale: string }) {
   const router = useRouter();
-  const pathname = usePathname();
   const isKo = locale === 'ko';
 
   const [query, setQuery] = useState('');
@@ -85,6 +110,12 @@ export function SearchBar({ locale }: { locale: string }) {
     return new Intl.NumberFormat('ko-KR').format(n);
   }
 
+  const hasResults =
+    suggestions &&
+    (suggestions.products.length > 0 ||
+      suggestions.brands.length > 0 ||
+      (suggestions.creators && suggestions.creators.length > 0));
+
   return (
     <div ref={containerRef} className="relative">
       {showInput ? (
@@ -125,15 +156,15 @@ export function SearchBar({ locale }: { locale: string }) {
       )}
 
       {/* Autocomplete dropdown */}
-      {isOpen && suggestions && (suggestions.products.length > 0 || suggestions.brands.length > 0) && (
+      {isOpen && hasResults && (
         <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto rounded-2xl border border-border bg-card shadow-xl z-50">
           {/* Brand suggestions */}
-          {suggestions.brands.length > 0 && (
+          {suggestions!.brands.length > 0 && (
             <div className="p-2">
               <p className="px-2 text-xs font-medium text-muted-foreground mb-1">
                 {isKo ? '브랜드' : 'Brands'}
               </p>
-              {suggestions.brands.map((brand) => (
+              {suggestions!.brands.map((brand) => (
                 <button
                   key={brand.id}
                   onClick={() => {
@@ -154,23 +185,72 @@ export function SearchBar({ locale }: { locale: string }) {
                   ) : (
                     <div className="h-6 w-6 rounded-md bg-muted" />
                   )}
-                  <span className="font-medium">{brand.brandName}</span>
+                  <span className="font-medium">{highlightMatch(brand.brandName, query)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Creator suggestions */}
+          {suggestions!.creators && suggestions!.creators.length > 0 && (
+            <div className="p-2 border-t border-border">
+              <p className="px-2 text-xs font-medium text-muted-foreground mb-1">
+                {isKo ? '크리에이터' : 'Creators'}
+              </p>
+              {suggestions!.creators.map((creator) => (
+                <button
+                  key={creator.id}
+                  onClick={() => {
+                    router.push(`/${locale}/${creator.username}`);
+                    setIsOpen(false);
+                    setShowInput(false);
+                  }}
+                  className="flex items-center gap-3 w-full rounded-xl px-2 py-2 text-sm hover:bg-muted transition-colors"
+                >
+                  {creator.profileImageUrl ? (
+                    <Image
+                      src={creator.profileImageUrl}
+                      alt=""
+                      width={32}
+                      height={32}
+                      className="rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="font-medium truncate">
+                      {highlightMatch(creator.displayName || creator.username || '', query)}
+                    </p>
+                    {creator.username && (
+                      <p className="text-xs text-muted-foreground">@{creator.username}</p>
+                    )}
+                  </div>
+                  {creator.igFollowers && (
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {formatFollowers(creator.igFollowers)}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
           )}
 
           {/* Product suggestions */}
-          {suggestions.products.length > 0 && (
+          {suggestions!.products.length > 0 && (
             <div className="p-2 border-t border-border">
               <p className="px-2 text-xs font-medium text-muted-foreground mb-1">
                 {isKo ? '상품' : 'Products'}
               </p>
-              {suggestions.products.map((product) => (
+              {suggestions!.products.map((product) => (
                 <button
                   key={product.id}
                   onClick={() => {
-                    router.push(`/${locale}/search?q=${encodeURIComponent(product.name || product.nameKo || '')}`);
+                    router.push(
+                      `/${locale}/search?q=${encodeURIComponent(product.name || product.nameKo || '')}`,
+                    );
                     setIsOpen(false);
                     setShowInput(false);
                   }}
@@ -188,7 +268,9 @@ export function SearchBar({ locale }: { locale: string }) {
                     <div className="h-9 w-9 rounded-lg bg-muted" />
                   )}
                   <div className="flex-1 text-left min-w-0">
-                    <p className="font-medium truncate">{product.name || product.nameKo}</p>
+                    <p className="font-medium truncate">
+                      {highlightMatch(product.name || product.nameKo || '', query)}
+                    </p>
                     <p className="text-xs text-muted-foreground">{product.brand.brandName}</p>
                   </div>
                   {product.salePrice && (
