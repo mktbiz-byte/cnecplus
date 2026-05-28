@@ -137,12 +137,51 @@ export function NotificationBell() {
     }
   }, [user?.id]);
 
-  // Initial fetch and polling every 30 seconds
+  // SSE 실시간 연결 + 폴백 폴링
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, [fetchNotifications]);
+
+    if (!user?.id) return;
+
+    // SSE 연결
+    let eventSource: EventSource | null = null;
+    let fallbackInterval: NodeJS.Timeout | null = null;
+
+    try {
+      eventSource = new EventSource('/api/notifications/stream');
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setUnreadCount(data.unreadCount ?? 0);
+
+          // 새 알림이 도착하면 목록도 갱신
+          if (data.type === 'new') {
+            fetchNotifications();
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      eventSource.onerror = () => {
+        // SSE 실패 시 폴백: 30초 폴링
+        eventSource?.close();
+        eventSource = null;
+        if (!fallbackInterval) {
+          fallbackInterval = setInterval(fetchNotifications, 30000);
+        }
+      };
+    } catch {
+      // EventSource 미지원 → 폴백
+      fallbackInterval = setInterval(fetchNotifications, 30000);
+    }
+
+    return () => {
+      eventSource?.close();
+      if (fallbackInterval) clearInterval(fallbackInterval);
+    };
+  }, [fetchNotifications, user?.id]);
 
   // Close dropdown on outside click
   useEffect(() => {

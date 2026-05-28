@@ -70,8 +70,8 @@ export function Header({ locale }: HeaderProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Notification Bell - for brand_admin and creator */}
-          {!isLoading && user && (user.role === 'brand_admin' || user.role === 'creator') && (
+          {/* Notification Bell - all logged-in users */}
+          {!isLoading && user && (
             <NotificationBell />
           )}
 
