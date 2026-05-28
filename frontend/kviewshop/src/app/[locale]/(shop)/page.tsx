@@ -2,6 +2,7 @@ import { prisma } from '@/lib/db';
 import type { Metadata } from 'next';
 import { LegalFooter } from '@/components/shop/legal-footer';
 import { BuyerHomePage } from '@/components/buyer/BuyerHomePage';
+import { buildHreflangAlternates } from '@/lib/seo';
 
 export const revalidate = 120;
 
@@ -17,6 +18,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     description: isKo
       ? '크리에이터가 직접 고른 K-뷰티 추천템을 만나보세요'
       : 'Discover K-beauty products handpicked by creators',
+    alternates: {
+      languages: buildHreflangAlternates('/no-shop-context'),
+    },
     openGraph: {
       title: isKo ? '크넥 — K-뷰티 크리에이터 셀렉트샵' : 'CNEC — K-Beauty Creator Select Shop',
       description: isKo

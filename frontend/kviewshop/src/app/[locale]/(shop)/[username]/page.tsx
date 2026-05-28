@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { CreatorShopPage } from '@/components/shop/creator-shop';
 import type { ShopCreator, ShopItem, ShopCollection } from '@/components/shop/creator-shop';
 import { OrganizationJsonLd } from '@/components/seo/JsonLd';
+import { buildHreflangAlternates } from '@/lib/seo';
 import { recordShopVisit } from '@/lib/actions/shop-visit';
 import type { Metadata } from 'next';
 
@@ -161,12 +162,25 @@ export async function generateMetadata({ params }: ShopPageProps): Promise<Metad
     description: shopDesc,
     alternates: {
       canonical: canonicalUrl,
+      languages: buildHreflangAlternates(`/${username}`),
     },
     openGraph: {
       title: `${displayName}의 K-뷰티 샵`,
       description: shopDesc,
       url: canonicalUrl,
-      images: ogImage ? [{ url: ogImage, width: 1200, height: 630 }] : [],
+      images: [
+        {
+          url: `${BASE_URL}/api/og/shop?${new URLSearchParams({
+            name: String(displayName),
+            bio: creator.bio || '',
+            image: creator.profileImageUrl || '',
+            followers: creator.igFollowers ? new Intl.NumberFormat('en', { notation: 'compact' }).format(creator.igFollowers) : '',
+          })}`,
+          width: 1200,
+          height: 630,
+          alt: `${displayName}의 K-뷰티 샵`,
+        },
+      ],
       type: 'website',
       siteName: 'CNEC Commerce',
     },
@@ -174,7 +188,13 @@ export async function generateMetadata({ params }: ShopPageProps): Promise<Metad
       card: 'summary_large_image',
       title: `${displayName}의 K-뷰티 샵`,
       description: shopDesc,
-      images: ogImage ? [ogImage] : [],
+      images: [
+        `${BASE_URL}/api/og/shop?${new URLSearchParams({
+          name: String(displayName),
+          bio: creator.bio || '',
+          image: creator.profileImageUrl || '',
+        })}`,
+      ],
     },
     robots: {
       index: true,

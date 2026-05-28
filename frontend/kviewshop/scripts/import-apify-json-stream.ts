@@ -325,7 +325,7 @@ async function processRecord(
       igDataImportedAt: now,
       igDataSource: DATA_SOURCE,
       igLastSyncedAt: now,
-      igSyncStatus: 'SUCCESS',
+      igSyncStatus: 'SUCCESS' as const,
     }
 
     // 기존 Creator 찾기
