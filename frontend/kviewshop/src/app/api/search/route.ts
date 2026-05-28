@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { withMonitoring } from '@/lib/api-monitor';
 
-export async function GET(request: NextRequest) {
+export const GET = withMonitoring('GET /api/search', async (request: NextRequest) => {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q')?.trim();
   const category = searchParams.get('category') || '';
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   // ─── Full search mode ───
   return handleFullSearch(q, category, brand, priceRange, sort, page, limit);
-}
+});
 
 /**
  * 자동완성: trigram similarity + ILIKE 혼합
