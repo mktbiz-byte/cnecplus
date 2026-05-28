@@ -7,6 +7,7 @@ import { Search, Users, ChevronRight } from 'lucide-react';
 import { CountdownTimer } from './CountdownTimer';
 import { CategoryChips } from './CategoryChips';
 import { BottomNav } from './BottomNav';
+import { TimeDealSection } from '@/components/shop/TimeDealSection';
 
 interface BrandInfo {
   brandName: string | null;
@@ -86,6 +87,27 @@ export function BuyerHomePage({ locale, creators, gongguCampaigns, topProducts }
     const id = setInterval(nextBanner, 5000);
     return () => clearInterval(id);
   }, [bannerCount, nextBanner]);
+
+  // 타임딜: 72시간 이내 마감 상품 추출
+  const timeDealProducts = gongguCampaigns
+    .filter(c => {
+      if (!c.endAt) return false;
+      const diff = new Date(c.endAt).getTime() - Date.now();
+      return diff > 0 && diff < 72 * 60 * 60 * 1000;
+    })
+    .flatMap(c =>
+      c.products.map(cp => ({
+        id: cp.product.id,
+        name: cp.product.name || '',
+        thumbnailUrl: cp.product.thumbnailUrl || cp.product.images?.[0] || null,
+        originalPrice: cp.product.originalPrice || 0,
+        campaignPrice: cp.campaignPrice,
+        shopId: '', // 타임딜은 검색으로 이동
+        campaignId: c.id,
+        endAt: c.endAt!,
+      })),
+    )
+    .slice(0, 10);
 
   // Ending today campaigns
   const endingToday = gongguCampaigns.filter(c => {
@@ -179,6 +201,9 @@ export function BuyerHomePage({ locale, creators, gongguCampaigns, topProducts }
             <span>상품 검색</span>
           </Link>
         </div>
+
+        {/* 타임딜 섹션 */}
+        <TimeDealSection products={timeDealProducts} locale={locale} />
 
         {!hasContent ? (
           <div className="px-4 py-20 text-center">

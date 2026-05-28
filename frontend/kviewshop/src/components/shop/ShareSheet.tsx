@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Share2, Copy, MessageCircle, FileText } from 'lucide-react';
+import { Share2, Copy, MessageCircle, FileText, Globe, Phone, Twitter } from 'lucide-react';
 import { buildShareUrl } from '@/lib/share';
 import { sendKakaoShare } from '@/lib/kakao';
 
@@ -51,6 +51,26 @@ export function ShareSheet({ url, title, description, imageUrl, trigger }: Share
     setOpen(false);
   };
 
+  const handleFacebookShare = () => {
+    const shareUrl = buildShareUrl(url, 'copy');
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank', 'width=600,height=400');
+    setOpen(false);
+  };
+
+  const handleXShare = () => {
+    const shareUrl = buildShareUrl(url, 'copy');
+    const text = `${title} - ${description}`;
+    window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`, '_blank', 'width=600,height=400');
+    setOpen(false);
+  };
+
+  const handleWhatsAppShare = () => {
+    const shareUrl = buildShareUrl(url, 'copy');
+    const text = `${title}\n${description}\n${shareUrl}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    setOpen(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -88,6 +108,30 @@ export function ShareSheet({ url, title, description, imageUrl, trigger }: Share
           >
             <FileText className="h-5 w-5 text-pink-500" />
             캡션 + 링크 복사
+          </Button>
+          <Button
+            variant="outline"
+            className="h-12 justify-start gap-3"
+            onClick={handleFacebookShare}
+          >
+            <Globe className="h-5 w-5 text-blue-600" />
+            Facebook
+          </Button>
+          <Button
+            variant="outline"
+            className="h-12 justify-start gap-3"
+            onClick={handleXShare}
+          >
+            <Twitter className="h-5 w-5 text-gray-900" />
+            X (Twitter)
+          </Button>
+          <Button
+            variant="outline"
+            className="h-12 justify-start gap-3"
+            onClick={handleWhatsAppShare}
+          >
+            <Phone className="h-5 w-5 text-green-500" />
+            WhatsApp
           </Button>
         </div>
       </DialogContent>
