@@ -325,10 +325,15 @@ export function ProductDetailPage({
                   <span className="text-white text-xl font-bold">마감된 공구</span>
                 </div>
               )}
-              <img
+              <Image
                 src={images[currentImageIndex]}
                 alt={`${product.name} - ${currentImageIndex + 1}`}
-                className="w-full h-full object-cover"
+                fill
+                sizes="(max-width: 768px) 100vw, 512px"
+                className="object-cover"
+                priority={currentImageIndex === 0}
+                placeholder="blur"
+                blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1Ii8+PC9zdmc+"
               />
               {images.length > 1 && !isEnded && (
                 <>

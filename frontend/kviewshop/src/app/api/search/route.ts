@@ -104,7 +104,7 @@ async function handleSuggest(q: string) {
     `%${safeQ}%`,
   );
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     products: products.map((p) => ({
       id: p.id,
       name: p.name,
@@ -119,6 +119,8 @@ async function handleSuggest(q: string) {
       igFollowers: c.igFollowers ? Number(c.igFollowers) : null,
     })),
   });
+  response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+  return response;
 }
 
 /**
