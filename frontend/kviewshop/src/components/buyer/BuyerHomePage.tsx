@@ -8,6 +8,7 @@ import { CountdownTimer } from './CountdownTimer';
 import { CategoryChips } from './CategoryChips';
 import { BottomNav } from './BottomNav';
 import { TimeDealSection } from '@/components/shop/TimeDealSection';
+import { RecentViewsHome } from '@/components/shop/RecentViewsHome';
 
 interface BrandInfo {
   brandName: string | null;
@@ -204,6 +205,9 @@ export function BuyerHomePage({ locale, creators, gongguCampaigns, topProducts }
 
         {/* 타임딜 섹션 */}
         <TimeDealSection products={timeDealProducts} locale={locale} />
+
+        {/* 최근 본 상품 */}
+        <RecentViewsHome locale={locale} />
 
         {!hasContent ? (
           <div className="px-4 py-20 text-center">
