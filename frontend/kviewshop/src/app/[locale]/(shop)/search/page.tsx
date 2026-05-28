@@ -8,7 +8,7 @@ import { CategoryFilter } from '@/components/shop/CategoryFilter';
 
 const PAGE_SIZE = 20;
 
-type SortKey = 'popular' | 'recent' | 'price_low' | 'price_high' | 'rating' | 'review';
+type SortKey = 'popular' | 'relevance' | 'recent' | 'price_low' | 'price_high' | 'rating' | 'review';
 type PriceRange = '' | 'under10k' | 'under30k' | 'under50k' | 'over50k';
 
 export default function SearchPage() {
@@ -42,6 +42,7 @@ export default function SearchPage() {
     filter: isKo ? '필터' : 'Filter',
     all: isKo ? '전체' : 'All',
     sortPopular: isKo ? '인기순' : 'Popular',
+    sortRelevance: isKo ? '관련성순' : 'Relevance',
     sortRecent: isKo ? '��신순' : 'Recent',
     sortPriceLow: isKo ? '낮은가격순' : 'Price: Low',
     sortPriceHigh: isKo ? '높은가격순' : 'Price: High',
@@ -74,6 +75,7 @@ export default function SearchPage() {
   ];
 
   const sortOptions: { value: SortKey; label: string }[] = [
+    { value: 'relevance', label: t.sortRelevance },
     { value: 'popular', label: t.sortPopular },
     { value: 'recent', label: t.sortRecent },
     { value: 'price_low', label: t.sortPriceLow },
