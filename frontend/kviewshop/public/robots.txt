@@ -1,9 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /admin
-Disallow: /brand
-Disallow: /creator
-Disallow: /buyer
-Disallow: /api/
-
-Sitemap: https://shop.cnec.kr/sitemap.xml

@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { ProductDetailPage } from '@/components/shop/product-detail';
 import { ProductJsonLd } from '@/components/seo/JsonLd';
+import { buildHreflangAlternates } from '@/lib/seo';
 import { recordRecentView, getRecentViews } from '@/lib/actions/recent-view';
 import { RecentViewsSection } from '@/components/shop/RecentViewsSection';
 import type { Metadata } from 'next';
@@ -172,12 +173,27 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
     description: ogDesc,
     alternates: {
       canonical: canonicalUrl,
+      languages: buildHreflangAlternates(`/${username}/product/${productId}`),
     },
     openGraph: {
       title: ogTitle,
       description: ogDesc,
       url: canonicalUrl,
-      images: ogImage ? [{ url: ogImage, width: 1200, height: 1200 }] : [],
+      images: [
+        {
+          url: `${BASE_URL}/api/og/product?${new URLSearchParams({
+            name: product.name || '',
+            brand: brandName,
+            price: `${priceText}원`,
+            discount: discountPercent > 0 ? String(discountPercent) : '',
+            image: ogImage || '',
+            shop: String(shopName),
+          })}`,
+          width: 1200,
+          height: 630,
+          alt: product.name || '',
+        },
+      ],
       type: 'website',
       siteName: 'CNEC Commerce',
     },
@@ -185,7 +201,16 @@ export async function generateMetadata({ params, searchParams }: ProductPageProp
       card: 'summary_large_image',
       title: ogTitle,
       description: ogDesc,
-      images: ogImage ? [ogImage] : [],
+      images: [
+        `${BASE_URL}/api/og/product?${new URLSearchParams({
+          name: product.name || '',
+          brand: brandName,
+          price: `${priceText}원`,
+          discount: discountPercent > 0 ? String(discountPercent) : '',
+          image: ogImage || '',
+          shop: String(shopName),
+        })}`,
+      ],
     },
     robots: {
       index: true,

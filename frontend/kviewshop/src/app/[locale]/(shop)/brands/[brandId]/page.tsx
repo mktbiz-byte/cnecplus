@@ -1,22 +1,49 @@
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { BrandProfileClient } from './brand-profile-client';
+import { OrganizationJsonLd } from '@/components/seo/JsonLd';
+import { buildHreflangAlternates } from '@/lib/seo';
 import type { Metadata } from 'next';
+
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cnecshop.com';
 
 interface PageProps {
   params: Promise<{ locale: string; brandId: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { brandId } = await params;
+  const { locale, brandId } = await params;
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
-    select: { brandName: true, description: true },
+    select: { brandName: true, description: true, logoUrl: true },
   });
   if (!brand) return { title: 'Brand Not Found' };
+
+  const desc = brand.description || `${brand.brandName} 브랜드 프로필`;
+  const canonicalUrl = `${BASE_URL}/${locale}/brands/${brandId}`;
+
   return {
     title: `${brand.brandName} — CNEC`,
-    description: brand.description || `${brand.brandName} 브랜드 프로필`,
+    description: desc,
+    alternates: {
+      canonical: canonicalUrl,
+      languages: buildHreflangAlternates(`/brands/${brandId}`),
+    },
+    openGraph: {
+      title: `${brand.brandName} — CNEC`,
+      description: desc,
+      url: canonicalUrl,
+      images: brand.logoUrl ? [{ url: brand.logoUrl, width: 400, height: 400 }] : [],
+      type: 'website',
+      siteName: 'CNEC Commerce',
+    },
+    twitter: {
+      card: 'summary',
+      title: `${brand.brandName} — CNEC`,
+      description: desc,
+      images: brand.logoUrl ? [brand.logoUrl] : [],
+    },
+    robots: { index: true, follow: true },
   };
 }
 
@@ -96,5 +123,15 @@ export default async function BrandProfilePage({ params }: PageProps) {
 
   if (!data) notFound();
 
-  return <BrandProfileClient data={data} locale={locale} />;
+  return (
+    <>
+      <OrganizationJsonLd
+        name={data.brand.brandName || ''}
+        url={`${BASE_URL}/${locale}/brands/${brandId}`}
+        imageUrl={data.brand.logoUrl || undefined}
+        description={data.brand.description || undefined}
+      />
+      <BrandProfileClient data={data} locale={locale} />
+    </>
+  );
 }
