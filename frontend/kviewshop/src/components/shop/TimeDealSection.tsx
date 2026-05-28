@@ -61,7 +61,11 @@ function TimeDealCard({ product, locale }: { product: TimeDealProduct; locale: s
 
   return (
     <Link
-      href={`/${locale}/${product.shopId}/product/${product.id}?campaign=${product.campaignId}`}
+      href={
+        product.shopId
+          ? `/${locale}/${product.shopId}/product/${product.id}?campaign=${product.campaignId}`
+          : `/${locale}/search?q=${encodeURIComponent(product.name)}`
+      }
       className="shrink-0 w-[160px] group"
     >
       <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">

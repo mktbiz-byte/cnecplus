@@ -217,6 +217,7 @@ export default async function DiscoveryPage({ params }: PageProps) {
       brandName: campaign.brand.brandName,
       logoUrl: campaign.brand.logoUrl ?? null,
     } : null,
+    creatorShopId: (campaign as any).participations?.[0]?.creator?.shopId ?? null,
     products: campaign.products.map(cp => ({
       campaignPrice: Number(cp.campaignPrice),
       product: {

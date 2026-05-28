@@ -137,45 +137,46 @@ export function NotificationBell() {
     }
   }, [user?.id]);
 
-  // SSE 실시간 연결 + 폴백 폴링
+  // SSE 실시간 연결 (서버 25초 후 끊김 → EventSource 자동 재연결)
   useEffect(() => {
     fetchNotifications();
 
     if (!user?.id) return;
 
-    // SSE 연결
     let eventSource: EventSource | null = null;
+    let errorCount = 0;
     let fallbackInterval: NodeJS.Timeout | null = null;
 
-    try {
-      eventSource = new EventSource('/api/notifications/stream');
+    function connectSSE() {
+      try {
+        eventSource = new EventSource('/api/notifications/stream');
+        errorCount = 0; // 연결 성공 시 초기화
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          setUnreadCount(data.unreadCount ?? 0);
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            setUnreadCount(data.unreadCount ?? 0);
+            if (data.type === 'new') fetchNotifications();
+          } catch { /* ignore */ }
+        };
 
-          // 새 알림이 도착하면 목록도 갱신
-          if (data.type === 'new') {
-            fetchNotifications();
+        eventSource.onerror = () => {
+          errorCount++;
+          // EventSource는 자동 재연결 (retry: 3000). 연속 5회 실패 시 폴백
+          if (errorCount >= 5) {
+            eventSource?.close();
+            eventSource = null;
+            if (!fallbackInterval) {
+              fallbackInterval = setInterval(fetchNotifications, 30000);
+            }
           }
-        } catch {
-          // ignore parse errors
-        }
-      };
-
-      eventSource.onerror = () => {
-        // SSE 실패 시 폴백: 30초 폴링
-        eventSource?.close();
-        eventSource = null;
-        if (!fallbackInterval) {
-          fallbackInterval = setInterval(fetchNotifications, 30000);
-        }
-      };
-    } catch {
-      // EventSource 미지원 → 폴백
-      fallbackInterval = setInterval(fetchNotifications, 30000);
+        };
+      } catch {
+        fallbackInterval = setInterval(fetchNotifications, 30000);
+      }
     }
+
+    connectSSE();
 
     return () => {
       eventSource?.close();

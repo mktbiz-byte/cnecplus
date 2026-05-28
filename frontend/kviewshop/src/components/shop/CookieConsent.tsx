@@ -5,26 +5,59 @@ import Link from 'next/link';
 import { X } from 'lucide-react';
 
 const COOKIE_CONSENT_KEY = 'cnec-cookie-consent';
+const COOKIE_MAX_AGE = 365 * 24 * 60 * 60; // 1년
+
+/**
+ * 쿠키 동의 상태 확인 유틸 (다른 컴포넌트에서 사용 가능)
+ */
+export function getCookieConsent(): 'accepted' | 'declined' | null {
+  if (typeof window === 'undefined') return null;
+  // 쿠키에서 먼저 확인
+  const match = document.cookie.match(/(?:^|; )cnec_consent=(\w+)/);
+  if (match) return match[1] as 'accepted' | 'declined';
+  // localStorage 폴백
+  return localStorage.getItem(COOKIE_CONSENT_KEY) as 'accepted' | 'declined' | null;
+}
+
+/**
+ * 비필수 쿠키(추적용) 사용 가능 여부
+ */
+export function isTrackingAllowed(): boolean {
+  return getCookieConsent() === 'accepted';
+}
+
+function setConsent(value: 'accepted' | 'declined') {
+  localStorage.setItem(COOKIE_CONSENT_KEY, value);
+  // 동의 상태를 쿠키로도 저장 (서버에서도 확인 가능)
+  document.cookie = `cnec_consent=${value}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`;
+
+  if (value === 'declined') {
+    // 거부 시 기존 추적 쿠키 삭제
+    const trackingCookies = ['_ga', '_gid', '_fbp'];
+    trackingCookies.forEach((name) => {
+      document.cookie = `${name}=; path=/; max-age=0`;
+    });
+  }
+}
 
 export function CookieConsent({ locale }: { locale: string }) {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    const consent = localStorage.getItem(COOKIE_CONSENT_KEY);
+    const consent = getCookieConsent();
     if (!consent) {
-      // 1초 후에 표시 (페이지 로드 후 자연스럽게)
-      const timer = setTimeout(() => setShow(true), 1000);
+      const timer = setTimeout(() => setShow(true), 1500);
       return () => clearTimeout(timer);
     }
   }, []);
 
   const handleAccept = () => {
-    localStorage.setItem(COOKIE_CONSENT_KEY, 'accepted');
+    setConsent('accepted');
     setShow(false);
   };
 
   const handleDecline = () => {
-    localStorage.setItem(COOKIE_CONSENT_KEY, 'declined');
+    setConsent('declined');
     setShow(false);
   };
 
@@ -46,8 +79,8 @@ export function CookieConsent({ locale }: { locale: string }) {
             </p>
             <p className="text-xs text-gray-500 leading-relaxed">
               {isKo
-                ? '더 나은 서비스를 위해 쿠키를 사용합니다. 계속 이용하시면 쿠키 사용에 동의하는 것으로 간주합니다.'
-                : 'We use cookies to improve your experience. By continuing, you agree to our cookie policy.'}
+                ? '서비스 개선 및 맞춤형 경험을 위해 쿠키를 사용합니다. 필수 쿠키는 항상 활성화되며, 선택적 추적 쿠키는 동의 시에만 사용됩니다.'
+                : 'We use cookies for essential features and optional tracking. Essential cookies are always active. Tracking cookies are used only with your consent.'}
               {' '}
               <Link
                 href={`/${locale}/privacy`}
@@ -70,13 +103,13 @@ export function CookieConsent({ locale }: { locale: string }) {
             onClick={handleDecline}
             className="flex-1 text-xs font-medium text-gray-500 py-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
           >
-            {isKo ? '거부' : 'Decline'}
+            {isKo ? '필수만 허용' : 'Essential Only'}
           </button>
           <button
             onClick={handleAccept}
             className="flex-1 text-xs font-medium text-white py-2 rounded-xl bg-[#1A1A1A] hover:bg-[#333] transition-colors"
           >
-            {isKo ? '동의' : 'Accept'}
+            {isKo ? '모두 허용' : 'Accept All'}
           </button>
         </div>
       </div>

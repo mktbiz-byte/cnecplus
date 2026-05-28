@@ -2,9 +2,15 @@ import { NextRequest } from 'next/server';
 import { getAuthUser } from '@/lib/auth-helpers';
 import { prisma } from '@/lib/db';
 
+// Vercel serverless 타임아웃 전에 연결 종료 (클라이언트가 재연결)
+const MAX_STREAM_DURATION_MS = 25_000;
+const POLL_INTERVAL_MS = 5_000;
+
 /**
  * SSE 엔드포인트: 실시간 알림 스트림
- * 5초마다 DB에서 미읽은 알림 수를 확인하여 변경 시 이벤트 전송
+ * - 5초마다 DB 변경 감지
+ * - 25초 후 자동 종료 (Vercel 타임아웃 대응)
+ * - 클라이언트 EventSource가 자동 재연결 (retry: 3000)
  */
 export async function GET(request: NextRequest) {
   const authUser = await getAuthUser();
@@ -19,28 +25,38 @@ export async function GET(request: NextRequest) {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      const startTime = Date.now();
+
+      // retry 간격 설정 (클라이언트 재연결 시 3초 대기)
+      controller.enqueue(encoder.encode('retry: 3000\n\n'));
+
       // 초기 데이터 즉시 전송
       try {
         const { unreadCount, latestId } = await getNotificationState(userId);
         lastUnreadCount = unreadCount;
         lastNotificationId = latestId;
-
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ type: 'init', unreadCount })}\n\n`),
         );
       } catch {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'init', unreadCount: 0 })}\n\n`));
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'init', unreadCount: 0 })}\n\n`),
+        );
       }
 
-      // 5초 간격으로 폴링하여 변경 사항 감지
       const interval = setInterval(async () => {
+        // 타임아웃 도달 시 스트림 종료 → 클라이언트가 자동 재연결
+        if (Date.now() - startTime > MAX_STREAM_DURATION_MS) {
+          clearInterval(interval);
+          try { controller.close(); } catch { /* already closed */ }
+          return;
+        }
+
         try {
           const { unreadCount, latestId, latestNotification } = await getNotificationState(userId);
 
-          // 새 알림이 생겼거나 읽음 상태가 변경된 경우만 이벤트 전송
           if (unreadCount !== lastUnreadCount || latestId !== lastNotificationId) {
             const isNewNotification = latestId !== lastNotificationId && latestId !== '';
-
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
@@ -50,19 +66,23 @@ export async function GET(request: NextRequest) {
                 })}\n\n`,
               ),
             );
-
             lastUnreadCount = unreadCount;
             lastNotificationId = latestId;
+          } else {
+            // 변경 없어도 keepalive ping (연결 유지)
+            controller.enqueue(encoder.encode(': ping\n\n'));
           }
         } catch {
-          // DB 연결 실패 등 — 무시하고 다음 폴링 대기
+          // DB 오류 시 keepalive만 전송
+          try {
+            controller.enqueue(encoder.encode(': ping\n\n'));
+          } catch { /* stream closed */ }
         }
-      }, 5000);
+      }, POLL_INTERVAL_MS);
 
-      // 클라이언트 연결 해제 시 정리
       request.signal.addEventListener('abort', () => {
         clearInterval(interval);
-        controller.close();
+        try { controller.close(); } catch { /* already closed */ }
       });
     },
   });
@@ -79,9 +99,7 @@ export async function GET(request: NextRequest) {
 
 async function getNotificationState(userId: string) {
   const [unreadCount, latest] = await Promise.all([
-    prisma.notification.count({
-      where: { userId, isRead: false },
-    }),
+    prisma.notification.count({ where: { userId, isRead: false } }),
     prisma.notification.findFirst({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -93,14 +111,7 @@ async function getNotificationState(userId: string) {
     unreadCount,
     latestId: latest?.id || '',
     latestNotification: latest
-      ? {
-          id: latest.id,
-          title: latest.title,
-          message: latest.message,
-          type: latest.type,
-          linkUrl: latest.linkUrl,
-          createdAt: latest.createdAt,
-        }
+      ? { id: latest.id, title: latest.title, message: latest.message, type: latest.type, linkUrl: latest.linkUrl, createdAt: latest.createdAt }
       : undefined,
   };
 }
