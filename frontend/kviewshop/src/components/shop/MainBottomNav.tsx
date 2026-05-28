@@ -70,6 +70,7 @@ export function MainBottomNav({ locale }: MainBottomNavProps) {
 
   return (
     <nav
+      aria-label="메인 네비게이션"
       className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-[#E5E5EA] md:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
