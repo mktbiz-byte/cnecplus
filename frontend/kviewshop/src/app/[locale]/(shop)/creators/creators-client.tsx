@@ -109,7 +109,7 @@ export function CreatorsPageClient({ creators, locale }: CreatorsPageClientProps
   const hasMore = visibleCount < filteredCreators.length;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-20 md:pb-0">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold">{t.title}</h1>

@@ -163,12 +163,12 @@ export function BuyerHomePage({ locale, creators, gongguCampaigns, topProducts }
     <div className="min-h-screen bg-white pb-[72px] md:pb-0">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm">
-        <div className="max-w-[480px] mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-[480px] md:max-w-3xl lg:max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <h1 className="text-xl font-bold text-[#1A1A1A] tracking-tight">CNEC</h1>
         </div>
       </header>
 
-      <div className="max-w-[480px] mx-auto">
+      <div className="max-w-[480px] md:max-w-3xl lg:max-w-5xl mx-auto">
         {/* Search bar */}
         <div className="px-4 pb-3">
           <Link
@@ -197,7 +197,7 @@ export function BuyerHomePage({ locale, creators, gongguCampaigns, topProducts }
             {/* Creator avatars horizontal scroll */}
             {creators.length > 0 && (
               <section className="pb-4">
-                <div className="flex gap-4 overflow-x-auto scrollbar-hide px-4 py-1">
+                <div className="flex gap-4 overflow-x-auto scrollbar-hide px-4 py-1 md:flex-wrap md:overflow-x-visible">
                   {creators.map(creator => {
                     const displayName = creator.displayName || creator.shopId || '';
                     const initials = displayName.slice(0, 1);
@@ -355,7 +355,7 @@ export function BuyerHomePage({ locale, creators, gongguCampaigns, topProducts }
                 <h2 className="text-base font-bold text-[#1A1A1A]">전체 상품</h2>
               </div>
               {filteredProducts.length > 0 ? (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
                   {filteredProducts.map(product => (
                     <Link
                       key={product.id}

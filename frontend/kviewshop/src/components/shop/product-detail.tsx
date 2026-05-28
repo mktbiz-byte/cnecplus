@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -192,6 +192,23 @@ export function ProductDetailPage({
     setCurrentImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
   }, [images.length]);
 
+  // Touch swipe for image gallery
+  const touchStartX = useRef<number>(0);
+  const touchEndX = useRef<number>(0);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  }, []);
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  }, []);
+  const handleTouchEnd = useCallback(() => {
+    const diff = touchStartX.current - touchEndX.current;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) handleNextImage();
+      else handlePrevImage();
+    }
+  }, [handleNextImage, handlePrevImage]);
+
   const handleAddToCart = async () => {
     if (isAddingToCart) return;
     setIsAddingToCart(true);
@@ -296,7 +313,12 @@ export function ProductDetailPage({
         {/* B. Image Carousel */}
         {images.length > 0 ? (
           <div className="relative bg-white">
-            <div className="aspect-square relative overflow-hidden">
+            <div
+              className="aspect-square relative overflow-hidden"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
               {/* Ended overlay */}
               {isEnded && (
                 <div className="absolute inset-0 z-10 bg-black/50 flex items-center justify-center">
@@ -324,10 +346,20 @@ export function ProductDetailPage({
                   </button>
                 </>
               )}
-              {/* Image counter badge */}
+              {/* Dot indicators */}
               {images.length > 1 && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 text-white text-xs font-medium rounded-full px-3 py-1">
-                  {currentImageIndex + 1}/{images.length}
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                  {images.map((_: string, idx: number) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentImageIndex(idx)}
+                      className={`rounded-full transition-all ${
+                        idx === currentImageIndex
+                          ? 'w-5 h-2 bg-white'
+                          : 'w-2 h-2 bg-white/50'
+                      }`}
+                    />
+                  ))}
                 </div>
               )}
             </div>

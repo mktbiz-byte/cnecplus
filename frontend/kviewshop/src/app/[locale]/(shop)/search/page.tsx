@@ -132,7 +132,7 @@ export default function SearchPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-20 md:pb-0">
       <div className="container mx-auto px-4 py-6">
         {/* Search Bar */}
         <form onSubmit={handleSearch} className="relative mb-6">
