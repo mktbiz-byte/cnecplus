@@ -43,7 +43,11 @@ describe('detectContentType', () => {
     expect(detectContentType('https://youtu.be/123')).toBe('YOUTUBE_SHORT');
   });
 
-  it('기타 URL → INSTAGRAM_REEL (기본값)', () => {
-    expect(detectContentType('https://example.com')).toBe('INSTAGRAM_REEL');
+  it('기타 URL → UNKNOWN', () => {
+    expect(detectContentType('https://example.com')).toBe('UNKNOWN');
+  });
+
+  it('유튜브 일반 URL → YOUTUBE_SHORT', () => {
+    expect(detectContentType('https://www.youtube.com/watch?v=123')).toBe('YOUTUBE_SHORT');
   });
 });

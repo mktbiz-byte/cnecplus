@@ -24,5 +24,6 @@ export function detectContentType(url: string): string {
   if (url.includes('instagram.com')) return 'INSTAGRAM_REEL';
   if (url.includes('tiktok.com')) return 'TIKTOK';
   if (url.includes('youtube.com/shorts') || url.includes('youtu.be')) return 'YOUTUBE_SHORT';
-  return 'INSTAGRAM_REEL';
+  if (url.includes('youtube.com')) return 'YOUTUBE_SHORT';
+  return 'UNKNOWN';
 }
